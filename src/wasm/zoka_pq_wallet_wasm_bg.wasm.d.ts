@@ -1,0 +1,34 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_webwallet_free: (a: number, b: number) => void;
+export const addressKind: (a: number, b: number, c: number) => [number, number];
+export const deriveKey: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+export const matchesShort: (a: number, b: number, c: number, d: number, e: number) => number;
+export const newPhrase: () => [number, number, number, number];
+export const qrMatrix: (a: number, b: number) => [number, number, number, number];
+export const shortOf: (a: number, b: number, c: number) => [number, number];
+export const validPhrase: (a: number, b: number) => number;
+export const webwallet_addPage: (a: number, b: number, c: number) => [number, number, number];
+export const webwallet_address: (a: number) => [number, number, number, number];
+export const webwallet_addressRecord: (a: number) => [number, number, number, number];
+export const webwallet_confirmCheckpoint: (a: number, b: number, c: number) => [number, number, number];
+export const webwallet_encodeState: (a: number) => [number, number, number, number];
+export const webwallet_inSync: (a: number) => number;
+export const webwallet_lastTransaction: (a: number) => [number, number, number, number];
+export const webwallet_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const webwallet_next: (a: number) => number;
+export const webwallet_prove: (a: number, b: number, c: number, d: bigint, e: number, f: number) => [number, number, number, number];
+export const webwallet_quote: (a: number, b: bigint) => [number, number];
+export const webwallet_release: (a: number) => void;
+export const webwallet_shortAddress: (a: number) => [number, number, number, number];
+export const webwallet_status: (a: number) => [number, number];
+export const webwallet_viewKey: (a: number) => [number, number, number, number];
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_start: () => void;
