@@ -43,7 +43,7 @@ export function Receive() {
                 Full address
               </span>
               <span className="item-sub" style={{ display: "block" }}>
-                About 1,760 characters. Works everywhere, always.
+                Long, but it always works.
               </span>
             </span>
             <Icon name={full ? "down" : "chevron"} />

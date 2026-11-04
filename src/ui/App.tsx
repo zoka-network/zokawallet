@@ -52,7 +52,9 @@ function Shell() {
   // A new Send each time the tab is opened, unless it holds a scanned text.
   const [sendKey, setSendKey] = useState(0);
 
-  // The browser's back button moves between tabs instead of leaving the wallet.
+  // The browser's back button returns to the Wallet tab (as in ZKAPriv),
+  // instead of leaving the site: one history entry above the Wallet one,
+  // replaced as the tabs change.
   useEffect(() => {
     const onPop = (event: PopStateEvent) => {
       const state = event.state as { tab?: Tab; settings?: SettingsPage } | null;
@@ -72,7 +74,9 @@ function Shell() {
       setSettings("main");
       return;
     }
-    window.history.pushState({ tab: next, settings: page }, "");
+    const entry = { tab: next, settings: page };
+    if (window.history.state?.tab) window.history.replaceState(entry, "");
+    else window.history.pushState(entry, "");
     setTab(next);
     setSettings(page);
   };

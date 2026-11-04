@@ -75,6 +75,8 @@ export function Icon({ name, title }: { name: IconName; title?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
+      width="20"
+      height="20"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.7"

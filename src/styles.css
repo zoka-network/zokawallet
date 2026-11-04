@@ -29,6 +29,8 @@
 html, body, #root { height: 100%; }
 body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; }
 button, input, textarea, select { font: inherit; color: inherit; }
+ul, ol { list-style: none; }
+svg { flex-shrink: 0; }
 button { background: none; border: 0; cursor: pointer; }
 button:disabled { cursor: default; }
 a { color: var(--pink); text-decoration: none; }
@@ -133,6 +135,7 @@ button.item:hover { background: #ffffff05; }
 .item-sub { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-amount { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
 .item-amount.in { color: var(--green); }
+.item > svg { color: var(--muted); }
 .section { margin-top: 26px; }
 .section > .label { display: block; margin-bottom: 6px; }
 

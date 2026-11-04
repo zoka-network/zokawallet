@@ -64,7 +64,9 @@ const sleep = (ms: number, signal?: AbortSignal) =>
     );
   });
 
+/** Reads keep trying for about a minute; a write gives up sooner and says so. */
 const RETRIES = 6;
+const WRITE_RETRIES = 1;
 const MAX_WAIT_MS = 60_000;
 
 async function errorOf(response: Response): Promise<ApiError> {
@@ -80,8 +82,9 @@ async function errorOf(response: Response): Promise<ApiError> {
 
 export function httpApi(base: string, fetchFn: typeof fetch = (...args) => fetch(...args)): Api {
   // Busy (429, 503) waits for Retry-After; a lost connection is tried again a
-  // few times. Anything else is the node's answer.
-  async function request(path: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
+  // few times (the browser reports a refused CORS request the same way, so a
+  // write does not insist). Anything else is the node's answer.
+  async function request(path: string, init: RequestInit, signal?: AbortSignal, retries = RETRIES): Promise<Response> {
     for (let attempt = 0; ; attempt++) {
       let response: Response;
       try {
@@ -94,11 +97,11 @@ export function httpApi(base: string, fetchFn: typeof fetch = (...args) => fetch
         });
       } catch (error) {
         if (signal?.aborted) throw error;
-        if (attempt >= RETRIES) throw new ApiError(0, "The Zoka network cannot be reached right now");
+        if (attempt >= retries) throw new ApiError(0, "The Zoka network cannot be reached right now");
         await sleep(Math.min(1_000 * 2 ** attempt, MAX_WAIT_MS), signal);
         continue;
       }
-      if ((response.status === 429 || response.status === 503) && attempt < RETRIES) {
+      if ((response.status === 429 || response.status === 503) && attempt < Math.max(retries, 3)) {
         const after = Number(response.headers.get("Retry-After"));
         const wait = Number.isFinite(after) && after > 0 ? after * 1_000 : 1_000 * 2 ** attempt;
         await sleep(Math.min(wait, MAX_WAIT_MS), signal);
@@ -154,6 +157,7 @@ export function httpApi(base: string, fetchFn: typeof fetch = (...args) => fetch
             "/transactions",
             { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: new Uint8Array(tx) },
             signal,
+            WRITE_RETRIES,
           );
         } catch (error) {
           // The upload may have arrived before the connection broke.
@@ -176,6 +180,7 @@ export function httpApi(base: string, fetchFn: typeof fetch = (...args) => fetch
         "/address",
         { method: "POST", headers: { "Content-Type": "application/json" }, body: record },
         signal,
+        WRITE_RETRIES,
       );
       if (!response.ok) throw await errorOf(response);
     },

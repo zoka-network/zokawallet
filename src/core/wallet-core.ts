@@ -151,6 +151,9 @@ export class WalletCore {
   private unsent: { txid: string; bytes: Uint8Array } | null = null;
   private record: string | null = null;
   private publishing = false;
+  /** After a failed publication, the next try waits (1, 2, 4… 15 minutes). */
+  private publishAfter = 0;
+  private publishFailures = 0;
 
   private generation = 0;
   private controller = new AbortController();
@@ -194,7 +197,7 @@ export class WalletCore {
       publishing: this.publishing,
       height: status.height,
       // The tip is the node's latest status; a page may name a block newer still.
-      tip: this.network?.height ?? status.tip,
+      tip: Math.max(this.network?.height ?? status.tip, status.height),
       verified: status.verified,
       inSync: status.height >= (this.network?.height ?? status.tip),
       spendable: status.spendable_atoms,
@@ -266,9 +269,10 @@ export class WalletCore {
         this.names = [{ id, name: secret.name, order: 0 }];
         this.open(record, secret, null);
       } finally {
+        // Also after a failure: the page leaves its "working" screen.
         this.busy = null;
+        this.emit();
       }
-      this.emit();
       return this.snapshot();
     });
   }
@@ -297,8 +301,8 @@ export class WalletCore {
         this.open(record, secret, state ? await unseal(key, aad.state(record.id), state.state) : null);
       } finally {
         this.busy = null;
+        this.emit();
       }
-      this.emit();
       return this.snapshot();
     });
   }
@@ -337,6 +341,8 @@ export class WalletCore {
     this.unsent = null;
     this.record = null;
     this.publishing = false;
+    this.publishAfter = 0;
+    this.publishFailures = 0;
     this.lastCheckpoint = 0;
     this.sync = { state: "idle" };
   }
@@ -391,7 +397,9 @@ export class WalletCore {
         if (!this.live(generation)) return;
         this.sync = { state: "idle" };
         this.emit();
-        if (!this.publishing && !this.active?.secret.published) void this.publishAddress(generation);
+        if (!this.publishing && !this.active?.secret.published && this.now() >= this.publishAfter) {
+          void this.publishAddress(generation);
+        }
       } catch (error) {
         if (!this.live(generation)) return;
         failures++;
@@ -475,8 +483,11 @@ export class WalletCore {
         if (!this.live(generation)) return;
       }
       await this.updateSecret(generation, { published: true });
+      this.publishFailures = 0;
     } catch {
-      // Busy or offline: the next round tries again, with the same stamp.
+      // Busy, offline or an older node: later, with the same stamp.
+      this.publishFailures++;
+      this.publishAfter = this.now() + Math.min(60_000 * 2 ** (this.publishFailures - 1), 15 * 60_000);
     } finally {
       if (this.live(generation)) {
         this.publishing = false;

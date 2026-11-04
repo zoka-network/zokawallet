@@ -101,7 +101,7 @@ export function Home({ onWallets }: { onWallets: () => void }) {
           <div className="facts">
             <div>
               <p className="label">Chain tip</p>
-              <p className="fact-value">{state.network ? `#${state.network.height.toLocaleString("en")}` : "—"}</p>
+              <p className="fact-value">#{wallet.tip.toLocaleString("en")}</p>
             </div>
             <div>
               <p className="label">This wallet read</p>

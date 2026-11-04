@@ -112,11 +112,13 @@ describe("the wallet core", () => {
   });
 
   it("unlocks with the password only, and a wrong one changes nothing", async () => {
-    const { core, factory } = await setup();
+    const { core, factory, states } = await setup();
     const phrase = core.newPhrase();
     const created = await core.create(PASSWORD, "Main", phrase);
     expect(core.lock().phase).toBe("locked");
     await expect(core.unlock("not the password")).rejects.toThrow("Wrong password");
+    // The page hears that the attempt ended (it was stuck on "Opening").
+    expect(states.at(-1)).toMatchObject({ phase: "locked", busy: null });
     const again = await core.unlock(PASSWORD);
     expect(again.wallet!.address).toBe(created.wallet!.address);
     expect(await core.revealPhrase(PASSWORD)).toBe(phrase);
@@ -129,9 +131,10 @@ describe("the wallet core", () => {
   });
 
   it("refuses short passwords and bad words", async () => {
-    const { core } = await setup();
+    const { core, states } = await setup();
     await expect(core.create("short", "Main", core.newPhrase())).rejects.toThrow("10 characters");
     await expect(core.create(PASSWORD, "Main", "abandon abandon abandon")).rejects.toThrow("24 valid");
+    expect(states.at(-1)).toMatchObject({ phase: "empty", busy: null });
   });
 
   it("reads real testnet pages, keeps them sealed and resumes from them", async () => {

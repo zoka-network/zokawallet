@@ -44,9 +44,9 @@ export function Settings({ page, onPage }: { page: Page; onPage: (page: Page) =>
       <div className="section">
         <span className="label">Security</span>
         <ul className="list">
-          {row("Recovery words", "The 24 words that restore this wallet", () => onPage("phrase"), "eye")}
-          {row("View key", "Shows the balance without being able to spend", () => onPage("viewkey"), "eye")}
-          {row("Password", "Change the password of this browser's wallets", () => onPage("password"), "lock")}
+          {row("Recovery words", "The 24 words that restore it", () => onPage("phrase"), "eye")}
+          {row("View key", "Shows the balance, cannot spend", () => onPage("viewkey"), "eye")}
+          {row("Password", "Opens every wallet here", () => onPage("password"), "lock")}
           <li>
             <button type="button" className="item" onClick={() => void client.lock()}>
               <span className="item-icon">
