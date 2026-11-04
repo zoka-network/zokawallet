@@ -1,0 +1,6 @@
+# LF everywhere: the checksums of a build must not depend on the system.
+* text=auto eol=lf
+*.wasm binary
+*.woff2 binary
+*.png binary
+*.bin binary
