@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CopyButton, Header, Icon, Qr } from "./components";
+import { CopyButton, Icon, PageHead, Panel, Qr } from "./components";
 import { useWallet } from "./context";
 
 // The short address is the one to share (and the one in the QR, as in
@@ -11,53 +11,62 @@ export function Receive() {
   const wallet = state?.wallet;
   if (!wallet) return null;
   return (
-    <div className="screen">
-      <Header title="Receive" />
-      <div className="stack mt">
-        {wallet.published ? (
-          <>
-            <Qr text={wallet.short} label="QR code of your short address" />
-            <div className="address-box stack">
-              <p className="label">Your short address</p>
-              <p className="mono" style={{ fontSize: 14 }}>
-                {wallet.short}
-              </p>
-              <CopyButton text={wallet.short} label="Copy address" />
-            </div>
-            <p className="hint center">Anyone with ZSilent, ZKAPriv or this wallet can pay it. Your balance stays private.</p>
-          </>
-        ) : (
-          <div className="strip pink">
-            <Icon name="light" />
-            <p className="grow">
-              {wallet.publishing
-                ? "Activating your short address. This takes a few seconds."
-                : "Your short address activates once the network answers. Meanwhile, share the full address."}
-            </p>
+    <>
+      <PageHead
+        eyebrow={`${wallet.name} · Receive`}
+        title="Receive ZKA"
+        lede="Anyone with ZSilent, ZKAPriv or this wallet can pay this address. Sharing it does not show your balance or your payments."
+      />
+      <div className="split even">
+        <Panel title="QR code">
+          <div className="qr-panel">
+            {wallet.published ? (
+              <Qr text={wallet.short} label="QR code of your short address" />
+            ) : (
+              <div className="banner" style={{ width: "100%" }}>
+                <Icon name="light" />
+                <p className="grow">
+                  {wallet.publishing
+                    ? "Activating your short address. This takes a few seconds."
+                    : "Your short address activates once the network answers. Meanwhile, share the full address."}
+                </p>
+              </div>
+            )}
           </div>
-        )}
-        <div className="card">
-          <button type="button" className="item" style={{ padding: "14px 18px" }} onClick={() => setFull(!full)} aria-expanded={full}>
-            <span className="grow">
-              <span className="item-title" style={{ display: "block" }}>
-                Full address
-              </span>
-              <span className="item-sub" style={{ display: "block" }}>
-                Long, but it always works.
-              </span>
-            </span>
-            <Icon name={full ? "down" : "chevron"} />
-          </button>
-          {full && (
-            <div className="card-body stack" style={{ borderTop: "1px solid var(--line-soft)" }}>
-              <p className="mono" style={{ maxHeight: 180, overflow: "auto", fontSize: 11 }}>
-                {wallet.address}
-              </p>
-              <CopyButton text={wallet.address} label="Copy full address" />
-            </div>
+        </Panel>
+        <div className="stack" style={{ gap: 24 }}>
+          {wallet.published && (
+            <Panel title="Short address">
+              <div className="panel-body stack">
+                <p className="address-short">{wallet.short}</p>
+                <div className="actions start">
+                  <CopyButton text={wallet.short} label="Copy address" />
+                </div>
+                <p className="hint">The payer's wallet turns it into the full address and checks that both belong together.</p>
+              </div>
+            </Panel>
           )}
+          <Panel>
+            <button type="button" className="disclose" onClick={() => setFull(!full)} aria-expanded={full}>
+              <span className="grow">
+                <span className="disclose-title">Full address</span>
+                <span className="disclose-sub">Long, but it always works.</span>
+              </span>
+              <Icon name={full ? "down" : "chevron"} />
+            </button>
+            {full && (
+              <div className="panel-body stack" style={{ borderTop: "1px solid var(--line-soft)" }}>
+                <div className="address-box scroll">
+                  <p className="mono">{wallet.address}</p>
+                </div>
+                <div className="actions start">
+                  <CopyButton text={wallet.address} label="Copy full address" />
+                </div>
+              </div>
+            )}
+          </Panel>
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -42,6 +42,15 @@ own code and to the node's API. It allows no inline script, no other origin and
 no framing. Every build lists the SHA-256 of each file it serves in
 `/SHA256SUMS.txt`.
 
+## Layout
+
+The pages follow ZokaScan and zoka.network: a top bar with the sections
+(Overview, Send, Receive, Activity, Settings), the wallet menu and the lock, and
+panels below it. Creating, restoring and unlocking put the steps in a panel
+next to what the wallet is. Recovery words, the view key, the password and
+adding a wallet open in a window. Below 900 px the sections take a second row
+of the bar and the panels stack in one column.
+
 ## Develop
 
 ```sh
@@ -49,6 +58,8 @@ npm install
 npm run dev        # http://localhost:8090
 npm test           # amounts, links, the core with the real WebAssembly, the pages
 npm run build      # dist/ and dist/SHA256SUMS.txt
+node scripts/e2e-browser.mjs [out-dir]   # headless Chrome against the testnet, 1440 px
+E2E_WIDTH=390 node scripts/e2e-browser.mjs [out-dir]   # the same at a phone's width
 ```
 
 To update the WebAssembly, run these commands from the node repository:

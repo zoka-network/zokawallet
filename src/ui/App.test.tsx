@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { CoreState, OpenWallet } from "../core/wallet-core";
 import type { WalletClient } from "../worker/client";
 import { App } from "./App";
@@ -92,6 +92,8 @@ function fakeClient(initial: CoreState) {
   return { client, calls, set };
 }
 
+const section = (name: string) => within(screen.getByRole("navigation", { name: "Wallet sections" })).getByRole("button", { name });
+
 function renderApp(state: CoreState) {
   const fake = fakeClient(state);
   render(
@@ -143,18 +145,63 @@ describe("the wallet's pages", () => {
     expect(await screen.findByText("5,019,799.9996")).toBeInTheDocument();
   });
 
-  it("shows the balance with what waits, and five tabs", async () => {
+  it("shows the balance with what waits, and five sections", async () => {
     renderApp(base("open", openWallet({ reserved: 4_983_022_999_600, spendable: 36_776_999_800, pending: { txid: "cd".repeat(32), expiry: 4450 } })));
-    expect(await screen.findByText("5,019,799.9994")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("5,019,799.9994");
     expect(screen.getByText(/in a payment waiting for a block/)).toBeInTheDocument();
+    expect(screen.getByText("4,983,022.9996 ZKA")).toBeInTheDocument();
     const tabs = screen.getByRole("navigation", { name: "Wallet sections" });
-    expect([...tabs.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Wallet", "Send", "Receive", "Activity", "Settings"]);
-    expect(screen.getByRole("button", { name: "Wallet" })).toHaveAttribute("aria-current", "page");
+    expect([...tabs.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Overview", "Send", "Receive", "Activity", "Settings"]);
+    expect(section("Overview")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("lists the latest payments on the overview and opens one", async () => {
+    const history = [
+      { txid: "11".repeat(32), height: 4430, timestamp: 1_762_000_000, kind: "received" as const, amount_atoms: 7_000_000, fee_atoms: 0, memo: "from the web", confirmations: 8 },
+      { txid: "22".repeat(32), height: 4400, timestamp: 1_761_990_000, kind: "sent" as const, amount_atoms: 2_000_000, fee_atoms: 100, memo: "", confirmations: 38 },
+    ];
+    renderApp(base("open", openWallet({ history })));
+    const payments = await screen.findByRole("list", { name: "Payments" });
+    expect(within(payments).getAllByRole("button")).toHaveLength(2);
+    fireEvent.click(within(payments).getByText("from the web"));
+    const dialog = await screen.findByRole("dialog", { name: "Received" });
+    expect(within(dialog).getByText("11".repeat(32))).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("changes wallets from the menu, and adds one from there", async () => {
+    const fake = renderApp({ ...base("open", openWallet()), wallets: [{ id: "a", name: "Main" }, { id: "b", name: "Savings" }] });
+    const switched: string[] = [];
+    fake.client.switchWallet = async (id) => {
+      switched.push(id);
+      return fake.client.current()!;
+    };
+    fireEvent.click(await screen.findByRole("button", { name: "Wallet Main. Change wallet" }));
+    const menu = screen.getByRole("menu", { name: "Wallets" });
+    expect(within(menu).getByRole("menuitemradio", { name: "Main" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Savings" }));
+    await waitFor(() => expect(switched).toEqual(["b"]));
+    fireEvent.click(screen.getByRole("button", { name: "Wallet Main. Change wallet" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Add a wallet" }));
+    expect(await screen.findByRole("dialog", { name: "Add a wallet" })).toBeInTheDocument();
+    expect(section("Settings")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("shows the recovery words in a window, after the password", async () => {
+    renderApp(base("open", openWallet()));
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    fireEvent.click(within(screen.getByText("Recovery words").closest("li")!).getByRole("button", { name: "Show" }));
+    const dialog = await screen.findByRole("dialog", { name: "Recovery words" });
+    fireEvent.change(within(dialog).getByLabelText("Password"), { target: { value: "the right password" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Show the words" }));
+    expect((await within(dialog).findByRole("list", { name: "Recovery words" })).querySelectorAll("li")).toHaveLength(24);
   });
 
   it("checks a payment before proving it", async () => {
     renderApp(base("open", openWallet()));
-    fireEvent.click(await screen.findByRole("button", { name: "Send" }));
+    await screen.findByRole("navigation", { name: "Wallet sections" });
+    fireEvent.click(section("Send"));
     const to = screen.getByLabelText("To");
     const amount = screen.getByLabelText("Amount");
     fireEvent.change(to, { target: { value: "nonsense" } });
@@ -178,14 +225,16 @@ describe("the wallet's pages", () => {
 
   it("will not start a payment while the last one waits", async () => {
     renderApp(base("open", openWallet({ pending: { txid: "cd".repeat(32), expiry: 4450 } })));
-    fireEvent.click(await screen.findByRole("button", { name: "Send" }));
+    await screen.findByRole("navigation", { name: "Wallet sections" });
+    fireEvent.click(section("Send"));
     expect(screen.getByRole("status")).toHaveTextContent("waiting for a block");
     expect(screen.getByRole("button", { name: "Review" })).toBeDisabled();
   });
 
   it("shares the short address with its QR, and the full one on request", async () => {
     renderApp(base("open", openWallet()));
-    fireEvent.click(await screen.findByRole("button", { name: "Receive" }));
+    await screen.findByRole("navigation", { name: "Wallet sections" });
+    fireEvent.click(section("Receive"));
     expect(await screen.findByRole("img", { name: "QR code of your short address" })).toBeInTheDocument();
     expect(screen.getByText("zqtest2short")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Full address/ }));

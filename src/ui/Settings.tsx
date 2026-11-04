@@ -1,179 +1,238 @@
-import { useState } from "react";
-import { EXPLORER, MIN_PASSWORD, NETWORK_NAME, SITE, SOURCE } from "../config";
-import { CopyButton, Field, Header, Icon, PasswordInput, Sheet, Working } from "./components";
+import { useEffect, useState, type ReactNode } from "react";
+import { API, AUTO_LOCK_MINUTES, EXPLORER, MIN_PASSWORD, NETWORK_NAME, SITE, SOURCE } from "../config";
+import { CopyButton, Dialog, Field, Icon, PageHead, Panel, PasswordInput, Working, type IconName } from "./components";
 import { useWallet } from "./context";
-import { ConfirmStep, ForgetSheet, RestoreStep, TestnetNotice, WordsStep } from "./Onboarding";
+import { ConfirmStep, ForgetDialog, RestoreStep, TestnetNotice, Words, WordsStep } from "./Onboarding";
 
-type Page = "main" | "wallets" | "phrase" | "viewkey" | "password";
+/** What Settings opens on arrival (from the wallet menu). */
+export type SettingsIntent = null | "add";
 
-export function Settings({ page, onPage }: { page: Page; onPage: (page: Page) => void }) {
-  const { client, state } = useWallet();
-  const [forget, setForget] = useState(false);
-  if (!state?.wallet) return null;
-  if (page === "wallets") return <Wallets onBack={() => onPage("main")} />;
-  if (page === "phrase") return <Phrase onBack={() => onPage("main")} />;
-  if (page === "viewkey") return <ViewKey onBack={() => onPage("main")} />;
-  if (page === "password") return <ChangePassword onBack={() => onPage("main")} />;
-  const row = (label: string, detail: string, go: () => void, icon: Parameters<typeof Icon>[0]["name"]) => (
-    <li>
-      <button type="button" className="item" onClick={go}>
-        <span className="item-icon">
-          <Icon name={icon} />
-        </span>
-        <span className="grow">
-          <span className="item-title" style={{ display: "block" }}>
-            {label}
-          </span>
-          <span className="item-sub" style={{ display: "block" }}>
-            {detail}
-          </span>
-        </span>
-        <Icon name="chevron" />
-      </button>
-    </li>
-  );
+type Open = null | "add" | "phrase" | "viewkey" | "password" | "forget" | { edit: { id: string; name: string } };
+
+function Setting({
+  icon,
+  title,
+  sub,
+  on,
+  children,
+}: {
+  icon: IconName;
+  title: string;
+  sub?: string;
+  on?: boolean;
+  children?: ReactNode;
+}) {
   return (
-    <div className="screen">
-      <Header title="Settings" />
-      <div className="section">
-        <span className="label">Wallets</span>
-        <ul className="list">
-          {row("Wallets", `${state.wallets.length} in this browser · ${state.wallet.name} open`, () => onPage("wallets"), "wallet")}
-        </ul>
-      </div>
-      <div className="section">
-        <span className="label">Security</span>
-        <ul className="list">
-          {row("Recovery words", "The 24 words that restore it", () => onPage("phrase"), "eye")}
-          {row("View key", "Shows the balance, cannot spend", () => onPage("viewkey"), "eye")}
-          {row("Password", "Opens every wallet here", () => onPage("password"), "lock")}
-          <li>
-            <button type="button" className="item" onClick={() => void client.lock()}>
-              <span className="item-icon">
-                <Icon name="lock" />
-              </span>
-              <span className="grow item-title">Lock now</span>
-            </button>
-          </li>
-        </ul>
-      </div>
-      <div className="section">
-        <span className="label">About</span>
-        <div className="stack" style={{ marginTop: 8 }}>
-          <p className="hint">
-            Zoka Web Wallet {__APP_VERSION__} · {NETWORK_NAME}. Recovery words, keys, balance and proofs never leave this
-            browser; the node it reads from sees the same pages of the chain as every other wallet.
-          </p>
-          <TestnetNotice />
-          <nav className="footer-links" style={{ justifyContent: "flex-start", marginTop: 4 }} aria-label="Zoka">
-            <a href={SITE}>zoka.network</a>
-            <a href={EXPLORER}>ZokaScan</a>
-            <a href={SOURCE}>Source code</a>
-            <a href="/SHA256SUMS.txt">Checksums of this build</a>
-          </nav>
-        </div>
-      </div>
-      <div className="section">
-        <button type="button" className="btn danger block" onClick={() => setForget(true)}>
-          Forget this browser’s wallets
-        </button>
-      </div>
-      {forget && <ForgetSheet onClose={() => setForget(false)} />}
-    </div>
+    <li className="setting">
+      <span className={`item-icon${on ? " on" : ""}`}>
+        <Icon name={icon} />
+      </span>
+      <span className="grow">
+        <span className="setting-title">{title}</span>
+        {sub && <span className="setting-sub">{sub}</span>}
+      </span>
+      {children}
+    </li>
   );
 }
 
-type AddFlow = null | { step: "choose" } | { step: "words" | "confirm"; phrase: string } | { step: "restore" } | { step: "name"; phrase: string };
-
-function Wallets({ onBack }: { onBack: () => void }) {
+export function Settings({ intent, onIntentDone }: { intent: SettingsIntent; onIntentDone: () => void }) {
   const { client, state } = useWallet();
-  const [edit, setEdit] = useState<{ id: string; name: string } | null>(null);
-  const [add, setAdd] = useState<AddFlow>(null);
+  const [open, setOpen] = useState<Open>(intent);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  if (!state?.wallet) return null;
-
-  if (add?.step === "words") {
-    return <WordsStep phrase={add.phrase} onBack={() => setAdd(null)} onNext={() => setAdd({ step: "confirm", phrase: add.phrase })} />;
-  }
-  if (add?.step === "confirm") {
-    return <ConfirmStep phrase={add.phrase} onBack={() => setAdd({ step: "words", phrase: add.phrase })} onNext={() => setAdd({ step: "name", phrase: add.phrase })} />;
-  }
-  if (add?.step === "restore") {
-    return <RestoreStep onBack={() => setAdd(null)} onNext={(phrase) => setAdd({ step: "name", phrase })} />;
-  }
-  if (add?.step === "name") {
-    return (
-      <NameStep
-        title="Name the wallet"
-        initial={`Wallet ${state.wallets.length + 1}`}
-        error={error}
-        busy={busy}
-        onBack={() => setAdd(null)}
-        onDone={(name) => {
-          setBusy(true);
-          setError(null);
-          client.addWallet(name, add.phrase).then(
-            () => {
-              setBusy(false);
-              setAdd(null);
-              onBack();
-            },
-            (e: Error) => {
-              setBusy(false);
-              setError(e.message);
-            },
-          );
-        }}
-      />
-    );
-  }
+  useEffect(() => {
+    if (intent) {
+      setOpen(intent);
+      onIntentDone();
+    }
+  }, [intent, onIntentDone]);
+  const wallet = state?.wallet;
+  if (!state || !wallet) return null;
+  const close = () => setOpen(null);
 
   return (
-    <div className="screen">
-      <Header title="Wallets" onBack={onBack} />
-      <ul className="list mt" aria-label="Wallets in this browser">
-        {state.wallets.map((w) => {
-          const active = w.id === state.wallet!.id;
-          return (
-            <li key={w.id} className="row">
+    <>
+      <PageHead eyebrow="Settings" title="Settings" lede="The wallets of this browser, their keys, the password that seals them, and what this build is." />
+      <div className="settings-grid">
+        <Panel
+          title={`Wallets · ${state.wallets.length}`}
+          action={
+            <button type="button" className="btn small" onClick={() => setOpen("add")}>
+              <Icon name="plus" />
+              Add a wallet
+            </button>
+          }
+        >
+          <ul aria-label="Wallets in this browser">
+            {state.wallets.map((w) => {
+              const active = w.id === wallet.id;
+              return (
+                <Setting key={w.id} icon={active ? "check" : "wallet"} on={active} title={w.name} sub={active ? "Open now" : undefined}>
+                  {!active && (
+                    <button type="button" className="btn small" onClick={() => client.switchWallet(w.id).catch((e: Error) => setError(e.message))}>
+                      Open
+                    </button>
+                  )}
+                  <button type="button" className="btn small" onClick={() => setOpen({ edit: w })} aria-label={`Edit ${w.name}`}>
+                    Edit
+                  </button>
+                </Setting>
+              );
+            })}
+          </ul>
+          <div className="panel-foot">
+            {error ? <p className="error">{error}</p> : <p className="hint">Every wallet here opens with the same password. Each has its own 24 words.</p>}
+          </div>
+        </Panel>
+
+        <Panel title="Security">
+          <ul>
+            <Setting icon="key" title="Recovery words" sub={`The 24 words that restore ${wallet.name}`}>
+              <button type="button" className="btn small" onClick={() => setOpen("phrase")}>
+                Show
+              </button>
+            </Setting>
+            <Setting icon="eye" title="View key" sub="Shows the balance, cannot spend">
+              <button type="button" className="btn small" onClick={() => setOpen("viewkey")}>
+                Show
+              </button>
+            </Setting>
+            <Setting icon="shield" title="Password" sub="Opens every wallet in this browser">
+              <button type="button" className="btn small" onClick={() => setOpen("password")}>
+                Change
+              </button>
+            </Setting>
+            <Setting icon="lock" title="Auto-lock" sub={`After ${AUTO_LOCK_MINUTES} minutes without use, except during a payment`}>
+              <button type="button" className="btn small" onClick={() => void client.lock()}>
+                Lock now
+              </button>
+            </Setting>
+          </ul>
+        </Panel>
+
+        <Panel title="About">
+          <dl className="facts">
+            <dt>Version</dt>
+            <dd>Zoka Web Wallet {__APP_VERSION__}</dd>
+            <dt>Network</dt>
+            <dd>{NETWORK_NAME}</dd>
+            <dt>Reads from</dt>
+            <dd className="mono">{API.replace("https://", "")}</dd>
+            <dt>This build</dt>
+            <dd>
+              <a href="/SHA256SUMS.txt">Checksums</a> · <a href={SOURCE} target="_blank" rel="noopener noreferrer">Source code ↗</a>
+            </dd>
+            <dt>Zoka</dt>
+            <dd>
+              <a href={SITE} target="_blank" rel="noopener noreferrer">zoka.network ↗</a> · <a href={EXPLORER} target="_blank" rel="noopener noreferrer">ZokaScan ↗</a>
+            </dd>
+          </dl>
+          <div className="panel-foot stack" style={{ gap: 12 }}>
+            <p className="hint">Recovery words, keys, balance and proofs never leave this browser. The node it reads from sees the same pages of the chain as every other wallet.</p>
+            <TestnetNotice />
+          </div>
+        </Panel>
+
+        <Panel title="This browser" className="danger">
+          <div className="panel-body stack">
+            <p className="muted">Deletes every wallet stored here. The coins stay on the chain and come back with each wallet's 24 words, here or in ZSilent or ZKAPriv.</p>
+            <div className="actions start">
+              <button type="button" className="btn danger" onClick={() => setOpen("forget")}>
+                <Icon name="trash" />
+                Forget this browser’s wallets
+              </button>
+            </div>
+          </div>
+        </Panel>
+      </div>
+
+      {open === "add" && <AddWallet onClose={close} />}
+      {open === "phrase" && <Phrase onClose={close} />}
+      {open === "viewkey" && <ViewKey onClose={close} />}
+      {open === "password" && <ChangePassword onClose={close} />}
+      {open === "forget" && <ForgetDialog onClose={close} />}
+      {open && typeof open === "object" && <EditWallet wallet={open.edit} only={state.wallets.length === 1} onClose={close} />}
+    </>
+  );
+}
+
+type AddFlow = { step: "choose" } | { step: "words" | "confirm"; phrase: string } | { step: "restore" } | { step: "name"; phrase: string; from: "confirm" | "restore" };
+
+function AddWallet({ onClose }: { onClose: () => void }) {
+  const { client, state } = useWallet();
+  const [flow, setFlow] = useState<AddFlow>({ step: "choose" });
+  const [name, setName] = useState(`Wallet ${(state?.wallets.length ?? 0) + 1}`);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const titles: Record<AddFlow["step"], string> = {
+    choose: "Add a wallet",
+    words: "Its recovery words",
+    confirm: "Check the words",
+    restore: "Restore a wallet",
+    name: "Name the wallet",
+  };
+  return (
+    <Dialog title={titles[flow.step]} onClose={onClose} wide={flow.step === "words"}>
+      {flow.step === "choose" && (
+        <>
+          <p className="muted">A new wallet gets its own 24 words. A wallet from ZSilent or ZKAPriv comes with the words it already has.</p>
+          <div className="actions">
+            <button type="button" className="btn" onClick={() => setFlow({ step: "restore" })}>
+              <Icon name="key" />
+              Restore with 24 words
+            </button>
+            <button type="button" className="btn primary" onClick={() => client.newPhrase().then((phrase) => setFlow({ step: "words", phrase }))}>
+              <Icon name="plus" />
+              Create a new one
+            </button>
+          </div>
+        </>
+      )}
+      {flow.step === "words" && (
+        <WordsStep phrase={flow.phrase} onBack={() => setFlow({ step: "choose" })} onNext={() => setFlow({ step: "confirm", phrase: flow.phrase })} />
+      )}
+      {flow.step === "confirm" && (
+        <ConfirmStep
+          phrase={flow.phrase}
+          onBack={() => setFlow({ step: "words", phrase: flow.phrase })}
+          onNext={() => setFlow({ step: "name", phrase: flow.phrase, from: "confirm" })}
+        />
+      )}
+      {flow.step === "restore" && <RestoreStep onBack={() => setFlow({ step: "choose" })} onNext={(phrase) => setFlow({ step: "name", phrase, from: "restore" })} />}
+      {flow.step === "name" &&
+        (busy ? (
+          <Working title="Adding the wallet" />
+        ) : (
+          <form
+            className="stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setBusy(true);
+              setError(null);
+              client.addWallet(name, flow.phrase).then(onClose, (err: Error) => {
+                setBusy(false);
+                setError(err.message);
+              });
+            }}
+          >
+            <Field label="Wallet name" error={error} hint="Only you see it. It opens with the password of this browser.">
+              {(id) => <input id={id} className="input" value={name} maxLength={40} autoFocus onChange={(e) => setName(e.target.value)} />}
+            </Field>
+            <div className="actions">
               <button
                 type="button"
-                className="item grow"
-                aria-current={active ? "true" : undefined}
-                onClick={() => (active ? onBack() : client.switchWallet(w.id).then(onBack, (e: Error) => setError(e.message)))}
+                className="btn"
+                onClick={() => setFlow(flow.from === "restore" ? { step: "restore" } : { step: "confirm", phrase: flow.phrase })}
               >
-                <span className={`item-icon${active ? " out" : ""}`}>
-                  <Icon name={active ? "check" : "wallet"} />
-                </span>
-                <span className="grow item-title">{w.name}</span>
+                Back
               </button>
-              <button type="button" className="link" onClick={() => setEdit({ id: w.id, name: w.name })} aria-label={`Edit ${w.name}`}>
-                Edit
+              <button type="submit" className="btn primary wide">
+                Add wallet
               </button>
-            </li>
-          );
-        })}
-      </ul>
-      {error && <p className="error">{error}</p>}
-      <button type="button" className="btn block mt" onClick={() => setAdd({ step: "choose" })}>
-        <Icon name="plus" />
-        Add a wallet
-      </button>
-      <p className="hint mt">Every wallet here opens with the same password. Each has its own 24 words.</p>
-
-      {add?.step === "choose" && (
-        <Sheet title="Add a wallet" onClose={() => setAdd(null)}>
-          <button type="button" className="btn primary block" onClick={() => client.newPhrase().then((phrase) => setAdd({ step: "words", phrase }))}>
-            Create a new one
-          </button>
-          <button type="button" className="btn block" onClick={() => setAdd({ step: "restore" })}>
-            Restore with 24 words
-          </button>
-        </Sheet>
-      )}
-      {edit && <EditWallet wallet={edit} only={state.wallets.length === 1} onClose={() => setEdit(null)} />}
-    </div>
+            </div>
+          </form>
+        ))}
+    </Dialog>
   );
 }
 
@@ -183,17 +242,22 @@ function EditWallet({ wallet, only, onClose }: { wallet: { id: string; name: str
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
-    <Sheet title={removing ? `Remove ${wallet.name}` : "Edit wallet"} onClose={onClose}>
+    <Dialog title={removing ? `Remove ${wallet.name}` : "Edit wallet"} onClose={onClose}>
       {removing ? (
         <>
           <p className="muted">
             This browser forgets the wallet. Its coins stay on the chain: its 24 words restore it here or in ZSilent or
             ZKAPriv. Without them it cannot come back.
           </p>
-          <button type="button" className="btn danger block" onClick={() => client.removeWallet(wallet.id).then(onClose, (e: Error) => setError(e.message))}>
-            Remove it from this browser
-          </button>
           {error && <p className="error">{error}</p>}
+          <div className="actions">
+            <button type="button" className="btn" onClick={() => setRemoving(false)}>
+              Back
+            </button>
+            <button type="button" className="btn danger" onClick={() => client.removeWallet(wallet.id).then(onClose, (e: Error) => setError(e.message))}>
+              Remove it from this browser
+            </button>
+          </div>
         </>
       ) : (
         <form
@@ -204,91 +268,50 @@ function EditWallet({ wallet, only, onClose }: { wallet: { id: string; name: str
           }}
         >
           <Field label="Name" error={error}>
-            {(id) => <input id={id} className="input" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />}
+            {(id) => <input id={id} className="input" value={name} maxLength={40} autoFocus onChange={(e) => setName(e.target.value)} />}
           </Field>
-          <button type="submit" className="btn primary block" disabled={!name.trim()}>
-            Save
-          </button>
-          {!only && (
-            <button type="button" className="btn danger block" onClick={() => setRemoving(true)}>
-              Remove from this browser
+          <div className="actions">
+            {!only && (
+              <button type="button" className="btn danger" onClick={() => setRemoving(true)} style={{ marginRight: "auto" }}>
+                Remove from this browser
+              </button>
+            )}
+            <button type="submit" className="btn primary wide" disabled={!name.trim()}>
+              Save
             </button>
-          )}
+          </div>
         </form>
       )}
-    </Sheet>
+    </Dialog>
   );
 }
 
-function NameStep({
-  title,
-  initial,
-  error,
-  busy,
-  onBack,
-  onDone,
-}: {
-  title: string;
-  initial: string;
-  error: string | null;
-  busy: boolean;
-  onBack: () => void;
-  onDone: (name: string) => void;
-}) {
-  const [name, setName] = useState(initial);
-  if (busy) return <Working title="Adding the wallet" />;
-  return (
-    <div className="screen plain">
-      <Header title={title} onBack={onBack} />
-      <form
-        className="stack mt"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onDone(name);
-        }}
-      >
-        <Field label="Wallet name" error={error} hint="Only you see it.">
-          {(id) => <input id={id} className="input" value={name} maxLength={40} autoFocus onChange={(e) => setName(e.target.value)} />}
-        </Field>
-        <button type="submit" className="btn primary block">
-          Add wallet
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function Phrase({ onBack }: { onBack: () => void }) {
+function Phrase({ onClose }: { onClose: () => void }) {
   const { client, state } = useWallet();
   const [password, setPassword] = useState("");
   const [phrase, setPhrase] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  if (busy) return <Working title="Checking the password" />;
   return (
-    <div className="screen">
-      <Header title="Recovery words" onBack={onBack} />
-      {phrase ? (
-        <div className="stack mt">
+    <Dialog title="Recovery words" onClose={onClose} wide={!!phrase}>
+      {busy ? (
+        <Working title="Checking the password" />
+      ) : phrase ? (
+        <>
           <p className="muted">
-            The 24 words of {state?.wallet?.name}. Anyone who sees them can spend this wallet: never share them, never
-            type them into another site.
+            The 24 words of {state?.wallet?.name}. Anyone who sees them can spend this wallet: never share them, never type
+            them into another site.
           </p>
-          <ol className="words" aria-label="Recovery words">
-            {phrase.split(" ").map((word, i) => (
-              <li className="word" key={i}>
-                <small>{i + 1}</small>
-                <span>{word}</span>
-              </li>
-            ))}
-          </ol>
-          <button type="button" className="btn block" onClick={() => setPhrase(null)}>
-            Hide them
-          </button>
-        </div>
+          <Words phrase={phrase} />
+          <div className="actions">
+            <button type="button" className="btn primary wide" onClick={onClose}>
+              Hide them
+            </button>
+          </div>
+        </>
       ) : (
         <form
-          className="stack mt"
+          className="stack"
           onSubmit={(e) => {
             e.preventDefault();
             setBusy(true);
@@ -307,48 +330,60 @@ function Phrase({ onBack }: { onBack: () => void }) {
         >
           <p className="muted">Make sure nobody can see your screen.</p>
           <Field label="Password" error={error}>
-            {(id) => <PasswordInput id={id} value={password} onChange={(v) => { setError(null); setPassword(v); }} autoComplete="current-password" autoFocus />}
+            {(id) => (
+              <PasswordInput
+                id={id}
+                value={password}
+                onChange={(v) => {
+                  setError(null);
+                  setPassword(v);
+                }}
+                autoComplete="current-password"
+                autoFocus
+              />
+            )}
           </Field>
-          <button type="submit" className="btn primary block" disabled={!password}>
-            Show the words
-          </button>
+          <div className="actions">
+            <button type="submit" className="btn primary wide" disabled={!password}>
+              Show the words
+            </button>
+          </div>
         </form>
       )}
-    </div>
+    </Dialog>
   );
 }
 
-function ViewKey({ onBack }: { onBack: () => void }) {
+function ViewKey({ onClose }: { onClose: () => void }) {
   const { client } = useWallet();
   const [key, setKey] = useState<string | null>(null);
   return (
-    <div className="screen">
-      <Header title="View key" onBack={onBack} />
-      <div className="stack mt">
-        <p className="muted">
-          The view key shows this wallet's balance and payments, for example in ZokaScan, and cannot spend. Whoever has
-          it sees every payment of the wallet: share it only with someone who should.
-        </p>
-        {key ? (
-          <>
-            <div className="address-box">
-              <p className="mono" style={{ maxHeight: 180, overflow: "auto", fontSize: 11 }}>
-                {key}
-              </p>
-            </div>
+    <Dialog title="View key" onClose={onClose}>
+      <p className="muted">
+        The view key shows this wallet's balance and payments, for example in ZokaScan, and cannot spend. Whoever has it
+        sees every payment of the wallet: share it only with someone who should.
+      </p>
+      {key ? (
+        <>
+          <div className="address-box scroll">
+            <p className="mono">{key}</p>
+          </div>
+          <div className="actions">
             <CopyButton text={key} label="Copy view key" />
-          </>
-        ) : (
-          <button type="button" className="btn block" onClick={() => client.viewKey().then(setKey)}>
+          </div>
+        </>
+      ) : (
+        <div className="actions">
+          <button type="button" className="btn primary wide" onClick={() => client.viewKey().then(setKey)}>
             Show the view key
           </button>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </Dialog>
   );
 }
 
-function ChangePassword({ onBack }: { onBack: () => void }) {
+function ChangePassword({ onClose }: { onClose: () => void }) {
   const { client } = useWallet();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -357,56 +392,70 @@ function ChangePassword({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const ready = current && next.length >= MIN_PASSWORD && next === repeat;
-  if (busy) return <Working title="Sealing everything again" detail="With the new password." />;
-  if (done) {
-    return (
-      <div className="screen">
-        <div className="working">
-          <span className="done-mark">
-            <Icon name="check" />
-          </span>
-          <p className="title">Password changed</p>
-        </div>
-        <button type="button" className="btn primary block" onClick={onBack}>
-          Done
-        </button>
-      </div>
-    );
-  }
   return (
-    <div className="screen">
-      <Header title="Password" onBack={onBack} />
-      <form
-        className="stack mt"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!ready) return;
-          setBusy(true);
-          client.changePassword(current, next).then(
-            () => {
-              setBusy(false);
-              setDone(true);
-            },
-            (err: Error) => {
-              setBusy(false);
-              setError(err.message);
-            },
-          );
-        }}
-      >
-        <Field label="Current password" error={error}>
-          {(id) => <PasswordInput id={id} value={current} onChange={(v) => { setError(null); setCurrent(v); }} autoComplete="current-password" />}
-        </Field>
-        <Field label="New password" error={next && next.length < MIN_PASSWORD ? `At least ${MIN_PASSWORD} characters` : null}>
-          {(id) => <PasswordInput id={id} value={next} onChange={setNext} autoComplete="new-password" />}
-        </Field>
-        <Field label="Repeat the new password" error={repeat && repeat !== next ? "The passwords are different" : null}>
-          {(id) => <PasswordInput id={id} value={repeat} onChange={setRepeat} autoComplete="new-password" />}
-        </Field>
-        <button type="submit" className="btn primary block" disabled={!ready}>
-          Change password
-        </button>
-      </form>
-    </div>
+    <Dialog title="Change the password" onClose={onClose}>
+      {busy ? (
+        <Working title="Sealing everything again" detail="With the new password." />
+      ) : done ? (
+        <>
+          <div className="working" style={{ padding: "12px 0" }}>
+            <span className="mark">
+              <Icon name="check" />
+            </span>
+            <p className="step-title">Password changed</p>
+          </div>
+          <div className="actions">
+            <button type="button" className="btn primary wide" onClick={onClose}>
+              Done
+            </button>
+          </div>
+        </>
+      ) : (
+        <form
+          className="stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!ready) return;
+            setBusy(true);
+            client.changePassword(current, next).then(
+              () => {
+                setBusy(false);
+                setDone(true);
+              },
+              (err: Error) => {
+                setBusy(false);
+                setError(err.message);
+              },
+            );
+          }}
+        >
+          <Field label="Current password" error={error}>
+            {(id) => (
+              <PasswordInput
+                id={id}
+                value={current}
+                onChange={(v) => {
+                  setError(null);
+                  setCurrent(v);
+                }}
+                autoComplete="current-password"
+                autoFocus
+              />
+            )}
+          </Field>
+          <Field label="New password" error={next && next.length < MIN_PASSWORD ? `At least ${MIN_PASSWORD} characters` : null}>
+            {(id) => <PasswordInput id={id} value={next} onChange={setNext} autoComplete="new-password" />}
+          </Field>
+          <Field label="Repeat the new password" error={repeat && repeat !== next ? "The passwords are different" : null}>
+            {(id) => <PasswordInput id={id} value={repeat} onChange={setRepeat} autoComplete="new-password" />}
+          </Field>
+          <div className="actions">
+            <button type="submit" className="btn primary wide" disabled={!ready}>
+              Change password
+            </button>
+          </div>
+        </form>
+      )}
+    </Dialog>
   );
 }

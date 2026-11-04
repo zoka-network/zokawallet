@@ -1,23 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AUTO_LOCK_MINUTES } from "../config";
 import { Activity } from "./Activity";
-import { Icon, Working, type IconName } from "./components";
+import { Brand, PublicFrame, SiteFooter } from "./Frame";
+import { Icon, Working } from "./components";
 import { useWallet } from "./context";
-import { Home } from "./Home";
+import { Overview } from "./Home";
 import { Unlock, Welcome } from "./Onboarding";
 import { Receive } from "./Receive";
 import { Send } from "./Send";
-import { Settings } from "./Settings";
+import { Settings, type SettingsIntent } from "./Settings";
 
-type Tab = "home" | "send" | "receive" | "activity" | "settings";
-type SettingsPage = Parameters<typeof Settings>[0]["page"];
+export type Tab = "overview" | "send" | "receive" | "activity" | "settings";
 
-const TABS: { tab: Tab; label: string; icon: IconName }[] = [
-  { tab: "home", label: "Wallet", icon: "wallet" },
-  { tab: "send", label: "Send", icon: "send" },
-  { tab: "receive", label: "Receive", icon: "receive" },
-  { tab: "activity", label: "Activity", icon: "activity" },
-  { tab: "settings", label: "Settings", icon: "settings" },
+const TABS: { tab: Tab; label: string }[] = [
+  { tab: "overview", label: "Overview" },
+  { tab: "send", label: "Send" },
+  { tab: "receive", label: "Receive" },
+  { tab: "activity", label: "Activity" },
+  { tab: "settings", label: "Settings" },
 ];
 
 /** Locks after a while without input, never in the middle of a payment. */
@@ -46,89 +46,188 @@ function useAutoLock(active: boolean) {
   }, [active, client]);
 }
 
+function LiveStatus() {
+  const { state } = useWallet();
+  const wallet = state?.wallet;
+  if (!state || !wallet) return null;
+  const offline = state.sync.state === "offline";
+  const syncing = state.sync.state === "syncing" || !wallet.inSync;
+  return (
+    <span className="live">
+      <span className={`dot${offline ? " off" : syncing ? " busy" : ""}`} />
+      {offline ? "Offline" : syncing ? `Reading ${wallet.height.toLocaleString("en")} / ${wallet.tip.toLocaleString("en")}` : `Block ${wallet.height.toLocaleString("en")}`}
+    </span>
+  );
+}
+
+function WalletMenu({ onManage, onAdd }: { onManage: () => void; onAdd: () => void }) {
+  const { client, state } = useWallet();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  const wallet = state?.wallet;
+  if (!state || !wallet) return null;
+  const pick = (go: () => void) => () => {
+    setOpen(false);
+    go();
+  };
+  return (
+    <div className="wallet-menu" ref={box}>
+      <button
+        type="button"
+        className="wallet-button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Wallet ${wallet.name}. Change wallet`}
+        onClick={() => setOpen(!open)}
+      >
+        <Icon name="wallet" />
+        <span>{wallet.name}</span>
+        <Icon name="down" />
+      </button>
+      {open && (
+        <div className="menu" role="menu" aria-label="Wallets">
+          <p className="menu-label">Wallets in this browser</p>
+          {state.wallets.map((w) => {
+            const active = w.id === wallet.id;
+            return (
+              <button
+                key={w.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={active}
+                className="menu-item"
+                onClick={pick(() => !active && void client.switchWallet(w.id).catch(() => undefined))}
+              >
+                <span>{w.name}</span>
+                {active && <Icon name="check" />}
+              </button>
+            );
+          })}
+          <div className="menu-sep" />
+          <button type="button" role="menuitem" className="menu-item" onClick={pick(onAdd)}>
+            <span>Add a wallet</span>
+            <Icon name="plus" />
+          </button>
+          <button type="button" role="menuitem" className="menu-item" onClick={pick(onManage)}>
+            <span>Manage wallets</span>
+            <Icon name="settings" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Shell() {
-  const [tab, setTab] = useState<Tab>("home");
-  const [settings, setSettings] = useState<SettingsPage>("main");
-  // A new Send each time the tab is opened, unless it holds a scanned text.
+  const { client } = useWallet();
+  const [tab, setTab] = useState<Tab>("overview");
+  const [intent, setIntent] = useState<SettingsIntent>(null);
+  // A new Send each time it is opened.
   const [sendKey, setSendKey] = useState(0);
 
-  // The browser's back button returns to the Wallet tab (as in ZKAPriv),
-  // instead of leaving the site: one history entry above the Wallet one,
-  // replaced as the tabs change.
+  // The browser's back button returns to the overview instead of leaving the
+  // site: one history entry above the overview's, replaced as sections change.
   useEffect(() => {
     const onPop = (event: PopStateEvent) => {
-      const state = event.state as { tab?: Tab; settings?: SettingsPage } | null;
-      setTab(state?.tab ?? "home");
-      setSettings(state?.settings ?? "main");
+      const state = event.state as { tab?: Tab } | null;
+      setTab(state?.tab ?? "overview");
+      setIntent(null);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const go = (next: Tab, page: SettingsPage = "main") => {
+  const go = (next: Tab, nextIntent: SettingsIntent = null) => {
+    setIntent(nextIntent);
     if (next === "send" && tab !== "send") setSendKey((k) => k + 1);
-    if (next === tab && page === settings) return;
-    if (next === "home") {
+    window.scrollTo({ top: 0 });
+    if (next === tab) return;
+    if (next === "overview") {
       if (window.history.state?.tab) window.history.back();
-      setTab("home");
-      setSettings("main");
+      setTab("overview");
       return;
     }
-    const entry = { tab: next, settings: page };
+    const entry = { tab: next };
     if (window.history.state?.tab) window.history.replaceState(entry, "");
     else window.history.pushState(entry, "");
     setTab(next);
-    setSettings(page);
   };
 
   return (
-    <>
-      <main key={tab === "send" ? `send-${sendKey}` : tab} style={{ display: "contents" }}>
-        {tab === "home" && <Home onWallets={() => go("settings", "wallets")} />}
-        {tab === "send" && <Send onDone={() => go("home")} />}
+    <div className="page">
+      <header className="site-header">
+        <div className="site-nav has-sections">
+          <Brand onClick={() => go("overview")} />
+          <nav className="sections" aria-label="Wallet sections">
+            {TABS.map(({ tab: t, label }) => (
+              <button key={t} type="button" className="section-link" aria-current={tab === t ? "page" : undefined} onClick={() => go(t)}>
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="bar-tools">
+            <LiveStatus />
+            <WalletMenu onManage={() => go("settings")} onAdd={() => go("settings", "add")} />
+            <button type="button" className="icon-btn boxed" onClick={() => void client.lock()} aria-label="Lock the wallet" title="Lock">
+              <Icon name="lock" />
+            </button>
+          </div>
+        </div>
+      </header>
+      <main className="content" key={tab === "send" ? `send-${sendKey}` : tab}>
+        {tab === "overview" && <Overview go={go} />}
+        {tab === "send" && <Send onDone={() => go("overview")} onActivity={() => go("activity")} />}
         {tab === "receive" && <Receive />}
         {tab === "activity" && <Activity />}
-        {tab === "settings" && <Settings page={settings} onPage={(page) => go("settings", page)} />}
+        {tab === "settings" && <Settings intent={intent} onIntentDone={() => setIntent(null)} />}
       </main>
-      <nav className="tabs" aria-label="Wallet sections">
-        {TABS.map(({ tab: t, label, icon }) => (
-          <button key={t} type="button" className="tab" aria-current={tab === t ? "page" : undefined} onClick={() => go(t)}>
-            <Icon name={icon} />
-            {label}
-          </button>
-        ))}
-      </nav>
-    </>
+      <SiteFooter />
+    </div>
   );
 }
 
 export function App() {
   const { state, fatal } = useWallet();
   useAutoLock(state?.phase === "open");
-  let body;
   if (fatal) {
-    body = (
-      <div className="screen plain">
-        <div className="working">
-          <span className="done-mark" style={{ color: "var(--red)", background: "#f08a8a1a" }}>
-            <Icon name="alert" />
-          </span>
-          <p className="title">The wallet cannot start here</p>
-          <p className="muted">{fatal}</p>
-          <p className="hint">
-            It needs WebAssembly and the browser's storage. Private windows of some browsers do not allow them.
-          </p>
-        </div>
-      </div>
+    return (
+      <PublicFrame>
+        <main className="content">
+          <div className="working" style={{ paddingTop: 90 }}>
+            <span className="mark bad">
+              <Icon name="alert" />
+            </span>
+            <p className="step-title">The wallet cannot start here</p>
+            <p className="muted">{fatal}</p>
+            <p className="hint">It needs WebAssembly and the browser's storage. Private windows of some browsers do not allow them.</p>
+          </div>
+        </main>
+      </PublicFrame>
     );
-  } else if (!state || state.phase === "loading") {
-    body = <Working title="Starting the wallet" />;
-  } else if (state.phase === "empty") {
-    body = <Welcome />;
-  } else if (state.phase === "locked") {
-    body = <Unlock />;
-  } else {
-    body = <Shell />;
   }
-  return <div className="app">{body}</div>;
+  if (!state || state.phase === "loading") {
+    return (
+      <PublicFrame>
+        <main className="content">
+          <Working title="Starting the wallet" />
+        </main>
+      </PublicFrame>
+    );
+  }
+  if (state.phase === "empty") return <Welcome />;
+  if (state.phase === "locked") return <Unlock />;
+  return <Shell />;
 }

@@ -1,12 +1,20 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useWallet } from "./context";
 
 // Icons: plain strokes, drawn here (no icon font, nothing from elsewhere).
 const paths: Record<string, ReactNode> = {
   wallet: (
     <>
-      <rect x="3" y="6" width="18" height="13" rx="3" />
+      <rect x="3" y="6" width="18" height="13" rx="1.5" />
       <path d="M16 12.5h2M3 9h15a3 3 0 0 0-3-3H6" />
+    </>
+  ),
+  overview: (
+    <>
+      <rect x="3.5" y="3.5" width="7" height="7" />
+      <rect x="13.5" y="3.5" width="7" height="7" />
+      <rect x="3.5" y="13.5" width="7" height="7" />
+      <rect x="13.5" y="13.5" width="7" height="7" />
     </>
   ),
   send: <path d="M7 17 17 7M9 7h8v8" />,
@@ -25,14 +33,14 @@ const paths: Record<string, ReactNode> = {
   ),
   scan: (
     <>
-      <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" />
+      <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" />
       <path d="M7 12h10" />
     </>
   ),
   copy: (
     <>
-      <rect x="8.5" y="8.5" width="11" height="11" rx="2.5" />
-      <path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5" />
+      <rect x="8.5" y="8.5" width="11" height="11" />
+      <path d="M15.5 8.5V4.5h-11v11h4" />
     </>
   ),
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
@@ -42,7 +50,7 @@ const paths: Record<string, ReactNode> = {
   close: <path d="M6 6l12 12M18 6 6 18" />,
   lock: (
     <>
-      <rect x="5" y="10.5" width="14" height="10" rx="2.5" />
+      <rect x="5" y="10.5" width="14" height="10" rx="1" />
       <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
     </>
   ),
@@ -66,7 +74,16 @@ const paths: Record<string, ReactNode> = {
       <circle cx="12" cy="12" r="2.8" />
     </>
   ),
+  key: (
+    <>
+      <circle cx="8" cy="15" r="4" />
+      <path d="m11 12 8.5-8.5M16 7l2.5 2.5M14 9l2 2" />
+    </>
+  ),
+  shield: <path d="M12 3 19.5 6v5.5c0 4.5-3.2 8-7.5 9.5-4.3-1.5-7.5-5-7.5-9.5V6L12 3Z" />,
   light: <path d="M9.5 18h5M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z" />,
+  external: <path d="M8 16 16 8M10 8h6v6" />,
+  trash: <path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13" />,
 };
 
 export type IconName = keyof typeof paths;
@@ -79,9 +96,9 @@ export function Icon({ name, title }: { name: IconName; title?: string }) {
       height="20"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      strokeWidth="1.6"
+      strokeLinecap="square"
+      strokeLinejoin="miter"
       aria-hidden={title ? undefined : true}
       role={title ? "img" : undefined}
     >
@@ -91,23 +108,51 @@ export function Icon({ name, title }: { name: IconName; title?: string }) {
   );
 }
 
-export function Back({ onClick, label = "Back" }: { onClick: () => void; label?: string }) {
+/** The top of every page: what it is, a big line, and what can be done. */
+export function PageHead({
+  eyebrow,
+  title,
+  lede,
+  children,
+}: {
+  eyebrow: ReactNode;
+  title?: ReactNode;
+  lede?: ReactNode;
+  children?: ReactNode;
+}) {
   return (
-    <button type="button" className="icon-btn back" onClick={onClick} aria-label={label}>
-      <Icon name="back" />
-    </button>
+    <div className="page-head">
+      <p className="eyebrow">{eyebrow}</p>
+      {title && <h1 className="title">{title}</h1>}
+      {lede && <p className="lede">{lede}</p>}
+      {children}
+    </div>
   );
 }
 
-export function Header({ title, onBack, right }: { title: string; onBack?: () => void; right?: ReactNode }) {
+export function Panel({
+  title,
+  action,
+  className = "",
+  children,
+  label,
+}: {
+  title?: ReactNode;
+  action?: ReactNode;
+  className?: string;
+  children: ReactNode;
+  label?: string;
+}) {
   return (
-    <div className="top">
-      <div className="row grow">
-        {onBack && <Back onClick={onBack} />}
-        <h1 className="title">{title}</h1>
-      </div>
-      {right}
-    </div>
+    <section className={`panel ${className}`.trim()} aria-label={label}>
+      {(title || action) && (
+        <div className="panel-head">
+          {typeof title === "string" ? <h2 className="label">{title}</h2> : title}
+          {action}
+        </div>
+      )}
+      {children}
+    </section>
   );
 }
 
@@ -222,37 +267,58 @@ export function PasswordInput({
   );
 }
 
-export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+/** A window over the page: centred on a desktop, from the bottom on a phone. */
+export function Dialog({
+  title,
+  onClose,
+  wide = false,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  useEffect(() => {
+    // Focus moves into the window and comes back where it was.
+    const before = document.activeElement as HTMLElement | null;
+    if (!box.current?.contains(document.activeElement)) box.current?.focus();
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = overflow;
+      before?.focus?.();
+    };
+  }, []);
   return (
-    <div className="veil" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
-        <div className="spread">
-          <h2 className="title" style={{ fontSize: 21 }}>
-            {title}
-          </h2>
+    <div className="veil" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={box} tabIndex={-1} className={`dialog${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+        <div className="dialog-head">
+          <h2 id={titleId}>{title}</h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">
             <Icon name="close" />
           </button>
         </div>
-        <div className="stack mt">{children}</div>
+        <div className="dialog-body">{children}</div>
       </div>
     </div>
   );
 }
 
-export function Working({ title, detail }: { title: string; detail?: ReactNode }) {
+export function Working({ title, detail, children }: { title: string; detail?: ReactNode; children?: ReactNode }) {
   return (
     <div className="working" role="status" aria-live="polite">
       <div className="spinner" />
-      <p className="title" style={{ fontSize: 21 }}>
-        {title}
-      </p>
+      <p className="step-title">{title}</p>
       {detail && <p className="muted">{detail}</p>}
+      {children}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { EXPLORER, MEMO_BYTES } from "../config";
 import type { Recipient, Sent } from "../core/wallet-core";
 import { AmountError, atomsToInput, formatZka, memoBytes, parseZka } from "../lib/amount";
 import { middle, parsePaymentText } from "../lib/payment";
-import { CopyButton, Field, Header, Icon, Working, useElapsed } from "./components";
+import { CopyButton, Field, Icon, PageHead, Panel, useElapsed } from "./components";
 import { useWallet } from "./context";
 import { Scanner, canScan } from "./Scanner";
 
@@ -14,7 +14,15 @@ type Step =
   | { step: "done"; sent: Sent }
   | { step: "failed"; error: string };
 
-export function Send({ initial, onDone }: { initial?: string; onDone: () => void }) {
+const STEP_NAMES: Record<Step["step"], string> = {
+  form: "Payment",
+  review: "Review",
+  working: "Proving",
+  done: "Sent",
+  failed: "Not sent",
+};
+
+export function Send({ initial, onDone, onActivity }: { initial?: string; onDone: () => void; onActivity: () => void }) {
   const { client, state } = useWallet();
   const [flow, setFlow] = useState<Step>({ step: "form" });
   const prefill = initial ? parsePaymentText(initial) : null;
@@ -75,117 +83,114 @@ export function Send({ initial, onDone }: { initial?: string; onDone: () => void
     );
   };
 
-  if (flow.step === "working") return <SendWorking />;
+  const blocked = wallet.unsent
+    ? "A payment still has to reach the network: see the overview."
+    : wallet.pending
+      ? "Your last payment is waiting for a block. Send again once it is mined."
+      : null;
 
-  if (flow.step === "done") {
+  let body;
+  if (flow.step === "working") {
+    body = <SendWorking />;
+  } else if (flow.step === "done") {
     const { sent } = flow;
-    return (
-      <div className="screen">
-        <div className="working">
-          <span className="done-mark">
+    body = (
+      <div className="panel-body stack">
+        <div className="working" style={{ padding: "20px 0 6px" }}>
+          <span className={`mark${sent.delivered ? "" : " bad"}`}>
             <Icon name={sent.delivered ? "check" : "alert"} />
           </span>
-          <p className="title">{sent.delivered ? "Payment sent" : "Proved, not delivered"}</p>
-          <p className="balance-value" style={{ fontSize: 30 }}>
+          <p className="step-title">{sent.delivered ? "Payment sent" : "Proved, not delivered"}</p>
+          <p className="amount-big">
             {formatZka(sent.amount_atoms)}
-            <span className="balance-unit">ZKA</span>
+            <span className="unit" style={{ fontSize: 13, verticalAlign: "middle" }}>
+              ZKA
+            </span>
           </p>
           <p className="muted">
             {sent.delivered
               ? "It joins the chain with the next block, usually within a few minutes."
-              : "The network could not be reached. Send it again from the Wallet tab, or cancel it there."}
+              : "The network could not be reached. Send it again from the overview, or cancel it there."}
           </p>
         </div>
         <div className="address-box stack">
           <p className="label">Payment id</p>
           <p className="mono">{sent.txid}</p>
-          <div className="row">
-            <CopyButton text={sent.txid} small />
+          <div className="actions start">
+            <CopyButton text={sent.txid} label="Copy id" small />
             <a className="btn small" href={`${EXPLORER}/search/${sent.txid}`} target="_blank" rel="noreferrer noopener">
               View on ZokaScan
+              <Icon name="external" />
             </a>
           </div>
         </div>
-        <button type="button" className="btn primary block mt" onClick={onDone}>
-          Done
-        </button>
+        <div className="actions">
+          <button type="button" className="btn" onClick={onActivity}>
+            Activity
+          </button>
+          <button type="button" className="btn primary wide" onClick={onDone}>
+            Done
+          </button>
+        </div>
       </div>
     );
-  }
-
-  if (flow.step === "failed") {
-    return (
-      <div className="screen">
-        <div className="working">
-          <span className="done-mark" style={{ color: "var(--red)", background: "#f08a8a1a" }}>
+  } else if (flow.step === "failed") {
+    body = (
+      <div className="panel-body stack">
+        <div className="working" style={{ padding: "20px 0 6px" }}>
+          <span className="mark bad">
             <Icon name="alert" />
           </span>
-          <p className="title">The payment was not sent</p>
+          <p className="step-title">The payment was not sent</p>
           <p className="muted">{flow.error}</p>
         </div>
-        <button type="button" className="btn primary block" onClick={() => setFlow({ step: "form" })}>
-          Back
-        </button>
-      </div>
-    );
-  }
-
-  if (flow.step === "review") {
-    const total = flow.amount + flow.fee;
-    return (
-      <div className="screen">
-        <Header title="Review" onBack={() => setFlow({ step: "form" })} />
-        <div className="card mt">
-          <div className="card-body stack">
-            <div>
-              <p className="label">To</p>
-              <p className="mono" style={{ marginTop: 4, fontSize: 13 }}>
-                {flow.recipient.short || middle(flow.recipient.full, 14)}
-              </p>
-              {flow.recipient.short && (
-                <p className="hint" style={{ marginTop: 4 }}>
-                  Full address checked against this short address here.
-                </p>
-              )}
-            </div>
-            <div className="spread">
-              <span className="label">Amount</span>
-              <span>{formatZka(flow.amount)} ZKA</span>
-            </div>
-            <div className="spread">
-              <span className="label">Network fee</span>
-              <span>{formatZka(flow.fee)} ZKA</span>
-            </div>
-            <div className="spread" style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
-              <span className="label">Total</span>
-              <span style={{ fontSize: 18 }}>{formatZka(total)} ZKA</span>
-            </div>
-            {flow.memo && (
-              <div>
-                <p className="label">Note</p>
-                <p style={{ marginTop: 4, overflowWrap: "anywhere" }}>{flow.memo}</p>
-              </div>
-            )}
-          </div>
+        <div className="actions">
+          <button type="button" className="btn primary wide" onClick={() => setFlow({ step: "form" })}>
+            Back
+          </button>
         </div>
-        <p className="hint mt">
-          The payment's proof is made in this browser and takes a few seconds: keep this tab open. Only the proved
-          payment is sent to the network.
-        </p>
-        <button type="button" className="btn primary block mt" onClick={() => send(flow)}>
-          Send {formatZka(flow.amount)} ZKA
-        </button>
       </div>
     );
-  }
-
-  const blocked = wallet.unsent ? "A payment still has to reach the network: see the Wallet tab." : wallet.pending ? "Your last payment is waiting for a block. Send again once it is mined." : null;
-
-  return (
-    <div className="screen">
-      <Header title="Send" />
+  } else if (flow.step === "review") {
+    const total = flow.amount + flow.fee;
+    body = (
+      <div className="panel-body stack">
+        <dl className="facts flush">
+          <dt>To</dt>
+          <dd>
+            <span className="mono" style={{ fontSize: 13 }}>
+              {flow.recipient.short || middle(flow.recipient.full, 14)}
+            </span>
+            {flow.recipient.short && <span className="hint" style={{ display: "block", marginTop: 4 }}>Full address checked against this short address here.</span>}
+          </dd>
+          <dt>Amount</dt>
+          <dd>{formatZka(flow.amount)} ZKA</dd>
+          <dt>Network fee</dt>
+          <dd>{formatZka(flow.fee)} ZKA</dd>
+          <dt>Total</dt>
+          <dd className="total">{formatZka(total)} ZKA</dd>
+          {flow.memo && (
+            <>
+              <dt>Note</dt>
+              <dd>{flow.memo}</dd>
+            </>
+          )}
+        </dl>
+        <p className="hint">The payment's proof is made in this browser and takes a few seconds: keep this tab open. Only the proved payment is sent to the network.</p>
+        <div className="actions">
+          <button type="button" className="btn" onClick={() => setFlow({ step: "form" })}>
+            Edit
+          </button>
+          <button type="button" className="btn primary wide" onClick={() => send(flow)}>
+            Send {formatZka(flow.amount)} ZKA
+          </button>
+        </div>
+      </div>
+    );
+  } else {
+    body = (
       <form
-        className="stack mt"
+        className="panel-body stack"
         onSubmit={(e) => {
           e.preventDefault();
           void review();
@@ -196,19 +201,15 @@ export function Send({ initial, onDone }: { initial?: string; onDone: () => void
           error={error?.field === "to" ? error.text : null}
           hint="A short or a full Zoka Quantic Testnet address."
           right={
-            <div className="row" style={{ gap: 2 }}>
+            <div className="row" style={{ gap: 14 }}>
               {navigator.clipboard?.readText && (
-                <button
-                  type="button"
-                  className="link"
-                  onClick={() => navigator.clipboard.readText().then((text) => onScanned(text), () => undefined)}
-                >
+                <button type="button" className="link" onClick={() => navigator.clipboard.readText().then((text) => onScanned(text), () => undefined)}>
                   Paste
                 </button>
               )}
               {canScan() && (
-                <button type="button" className="icon-btn" onClick={() => setScanning(true)} aria-label="Scan a QR code" style={{ width: 36, height: 28 }}>
-                  <Icon name="scan" />
+                <button type="button" className="link" onClick={() => setScanning(true)}>
+                  Scan QR
                 </button>
               )}
             </div>
@@ -220,6 +221,7 @@ export function Send({ initial, onDone }: { initial?: string; onDone: () => void
               className="textarea"
               rows={3}
               value={to}
+              placeholder="zqtest2…"
               autoComplete="off"
               autoCapitalize="off"
               spellCheck={false}
@@ -256,9 +258,7 @@ export function Send({ initial, onDone }: { initial?: string; onDone: () => void
                   setAmount(e.target.value);
                 }}
               />
-              <span className="label" style={{ position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)" }}>
-                ZKA
-              </span>
+              <span className="input-unit">ZKA</span>
             </div>
           )}
         </Field>
@@ -266,17 +266,64 @@ export function Send({ initial, onDone }: { initial?: string; onDone: () => void
           label="Note (optional)"
           error={error?.field === "memo" ? error.text : null}
           hint="Only you and the recipient can read it."
-          right={<span className="hint">{memoBytes(memo)} / {MEMO_BYTES}</span>}
+          right={
+            <span className="hint">
+              {memoBytes(memo)} / {MEMO_BYTES}
+            </span>
+          }
         >
           {(id) => <input id={id} className="input" value={memo} maxLength={MEMO_BYTES} onChange={(e) => setMemo(e.target.value)} />}
         </Field>
-        {blocked && <p className="hint" role="status">{blocked}</p>}
-        <button type="submit" className="btn primary block" disabled={!to.trim() || !amount.trim() || checking || !!blocked}>
-          {checking ? "Checking…" : "Review"}
-        </button>
+        {blocked && (
+          <p className="banner amber" role="status">
+            {blocked}
+          </p>
+        )}
+        <div className="actions">
+          <button type="submit" className="btn primary wide" disabled={!to.trim() || !amount.trim() || checking || !!blocked}>
+            {checking ? "Checking…" : "Review"}
+          </button>
+        </div>
       </form>
+    );
+  }
+
+  return (
+    <>
+      <PageHead
+        eyebrow={`${wallet.name} · Send`}
+        title="Send ZKA"
+        lede="To a short or a full address. The payment is proved in this browser before it is sent, and its amount and note stay between you and the recipient."
+      />
+      <div className="split">
+        <Panel title={STEP_NAMES[flow.step]} label="Payment">
+          {body}
+        </Panel>
+        <Panel title="From this wallet">
+          <dl className="facts">
+            <dt>Wallet</dt>
+            <dd>{wallet.name}</dd>
+            <dt>Available</dt>
+            <dd>{formatZka(wallet.spendable)} ZKA</dd>
+            <dt>Max in one payment</dt>
+            <dd>{formatZka(wallet.maxSendable)} ZKA</dd>
+            {wallet.reserved > 0 && (
+              <>
+                <dt>Waiting</dt>
+                <dd>{formatZka(wallet.reserved)} ZKA</dd>
+              </>
+            )}
+          </dl>
+          <div className="panel-foot">
+            <p className="hint">
+              One payment at a time: while one waits for its block, the next has to wait too. Payments expire if no
+              block takes them within 20 blocks, and the ZKA come back.
+            </p>
+          </div>
+        </Panel>
+      </div>
       {scanning && <Scanner onText={onScanned} onClose={() => setScanning(false)} />}
-    </div>
+    </>
   );
 }
 
@@ -285,11 +332,24 @@ function SendWorking() {
   const seconds = useElapsed(true);
   const sending = state?.busy === "sending";
   return (
-    <div className="screen">
-      <Working
-        title={sending ? "Handing it to the network" : "Proving the payment"}
-        detail={sending ? "Almost done." : `A STARK proof, made in this browser · ${seconds} s`}
-      />
+    <div className="working" role="status" aria-live="polite">
+      <div className="spinner" />
+      <p className="step-title">{sending ? "Handing it to the network" : "Proving the payment"}</p>
+      <p className="muted">{sending ? "Almost done." : `A STARK proof, made in this browser · ${seconds} s`}</p>
+      <ol className="progress">
+        <li className="done">
+          <i />
+          Notes chosen and reserved
+        </li>
+        <li className={sending ? "done" : "now"}>
+          <i />
+          STARK proof
+        </li>
+        <li className={sending ? "now" : ""}>
+          <i />
+          Delivered to the network
+        </li>
+      </ol>
     </div>
   );
 }

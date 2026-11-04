@@ -5,9 +5,10 @@
 //
 //   npm run build && node scripts/e2e-browser.mjs [out-dir]
 //
-// CHROME (path of chrome.exe) and E2E_WIDTH (default 360) can be set. The
-// wallet is a throwaway one: its words are typed by the script and never
-// printed. Screenshots of the words are not taken.
+// CHROME (path of chrome.exe) and E2E_WIDTH (default 1440; below 700 the page
+// is a phone's) can be set. The wallet is a throwaway one: its words are typed
+// by the script and never printed, and the screenshot of the words step blurs
+// them.
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,7 +16,9 @@ import { join } from "node:path";
 
 const OUT = process.argv[2] ?? join(tmpdir(), "zokawallet-e2e");
 const CHROME = process.env.CHROME ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
-const WIDTH = Number(process.env.E2E_WIDTH ?? 360);
+const WIDTH = Number(process.env.E2E_WIDTH ?? 1440);
+const PHONE = WIDTH < 700;
+const SECTIONS = `nav[aria-label="Wallet sections"]`;
 const PREVIEW = 8091;
 const DEBUG = 9333 + Math.floor(Math.random() * 500);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -125,7 +128,7 @@ await page("Network.enable");
 await page("Runtime.enable");
 await page("Log.enable");
 await page("Page.enable");
-await page("Emulation.setDeviceMetricsOverride", { width: WIDTH, height: 800, deviceScaleFactor: 2, mobile: true });
+await page("Emulation.setDeviceMetricsOverride", { width: WIDTH, height: PHONE ? 800 : 900, deviceScaleFactor: PHONE ? 2 : 1, mobile: PHONE });
 await page("Page.addScriptToEvaluateOnNewDocument", {
   source: `document.addEventListener("securitypolicyviolation", (e) => console.error("CSP violation", e.violatedDirective, e.blockedURI));`,
 });
@@ -143,8 +146,11 @@ async function until(expression, ms = 30_000, what = expression) {
     await sleep(250);
   }
 }
-async function shot(name) {
-  const { data } = await page("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+async function shot(name, whole = true) {
+  // The whole page, not only what fits on the screen (windows: the screen).
+  const { cssContentSize } = await page("Page.getLayoutMetrics");
+  const clip = { x: 0, y: 0, width: WIDTH, height: Math.ceil(cssContentSize.height), scale: 1 };
+  const { data } = await page("Page.captureScreenshot", whole ? { format: "png", captureBeyondViewport: true, clip } : { format: "png" });
   writeFileSync(join(OUT, `${name}.png`), Buffer.from(data, "base64"));
   console.log(`  screenshot ${name}.png`);
 }
@@ -159,6 +165,7 @@ await page("Page.addScriptToEvaluateOnNewDocument", {
       el.dispatchEvent(new Event("input", { bubbles: true }));
       return true;
     };
+    window.SECTIONS_SEL = ${JSON.stringify(SECTIONS)};
     window.__field = (label) => { const l = [...document.querySelectorAll("label")].find((x) => x.textContent.trim() === label); return l && document.getElementById(l.htmlFor); };
   `,
 });
@@ -176,9 +183,15 @@ try {
   await evaluate(`__click("button", "Create a wallet")`);
   await until(`document.querySelectorAll(".words li").length === 24`, 10_000, "the 24 words");
   const words = await evaluate(`[...document.querySelectorAll(".words li span")].map((s) => s.textContent)`);
+  // Blurred through the CSSOM: the page's CSP refuses an injected <style>.
+  const blur = (on) => evaluate(`document.querySelectorAll(".word span").forEach((s) => (s.style.filter = ${on} ? "blur(7px)" : "")), true`);
+  await blur(true);
+  if (await evaluate(`[...document.querySelectorAll(".word span")].every((s) => s.style.filter.startsWith("blur"))`)) await shot("01b-words");
+  await blur(false);
   await evaluate(`document.querySelector("input[type=checkbox]").click(), true`);
   await evaluate(`__click("button", "Continue")`);
   await until(`[...document.querySelectorAll("label")].filter((l) => /^Word \\d+$/.test(l.textContent)).length === 3`, 5_000, "the word check");
+  await shot("01c-check");
   await evaluate(`(() => {
     const words = ${JSON.stringify(words)};
     for (const l of [...document.querySelectorAll("label")].filter((l) => /^Word \\d+$/.test(l.textContent))) {
@@ -191,34 +204,33 @@ try {
   await evaluate(`__type(__field("Wallet name"), "E2E"), __type(__field("Password"), "e2e password 1234"), __type(__field("Repeat the password"), "e2e password 1234")`);
   await shot("02-password");
   await evaluate(`__click("button", "Create wallet")`);
-  await until(`!!document.querySelector("nav.tabs")`, 30_000, "the wallet");
+  await until(`!!document.querySelector(SECTIONS_SEL)`, 30_000, "the wallet");
   step("wallet open");
   await shot("03-home-first");
 
   step("reading the chain");
-  await until(`/Up to date/.test(document.querySelector(".sync")?.textContent ?? "")`, 6 * 60_000, "the end of the first read");
-  step(`read: ${await evaluate(`document.querySelector(".sync").textContent`)}`);
+  await until(`/Up to date/.test(document.querySelector(".status-line")?.textContent ?? "")`, 6 * 60_000, "the end of the first read");
+  step(`read: ${await evaluate(`document.querySelector(".status-line").textContent`)}`);
   await sleep(1_500);
-  await shot("04-home");
+  await shot("04-overview");
 
-  await evaluate(`document.querySelector(".sync").click(), true`);
-  await until(`!!document.querySelector("[role=dialog]")`, 5_000, "the network sheet");
-  await sleep(300);
-  await shot("05-network");
-  await evaluate(`document.querySelector("[aria-label=Close]").click(), true`);
+  await evaluate(`document.querySelector(".wallet-button").click(), true`);
+  await until(`!!document.querySelector("[role=menu]")`, 5_000, "the wallet menu");
+  await shot("05-wallet-menu", false);
+  await evaluate(`document.querySelector(".wallet-button").click(), true`);
 
   for (const [tab, name] of [
     ["Receive", "06-receive"],
     ["Activity", "07-activity"],
     ["Settings", "08-settings"],
   ]) {
-    await evaluate(`__click("nav.tabs button", "${tab}")`);
+    await evaluate(`__click(SECTIONS_SEL + " button", "${tab}")`);
     await sleep(700);
     await shot(name);
   }
 
   step("send: a wrong address and too many decimals");
-  await evaluate(`__click("nav.tabs button", "Send")`);
+  await evaluate(`__click(SECTIONS_SEL + " button", "Send")`);
   await until(`!!__field("To")`, 5_000, "the send form");
   await evaluate(`__type(__field("To"), "zqtest2nothing"), __type(__field("Amount"), "1.5")`);
   await evaluate(`__click("button", "Review")`);
@@ -227,11 +239,18 @@ try {
 
   step("browser back button returns to the wallet");
   await evaluate(`history.back(), true`);
-  await until(`document.querySelector("nav.tabs [aria-current=page]")?.textContent === "Wallet"`, 5_000, "the Wallet tab after back");
+  await until(`document.querySelector(SECTIONS_SEL + " [aria-current=page]")?.textContent === "Overview"`, 5_000, "the overview after back");
+
+  step("a window from Settings");
+  await evaluate(`__click(SECTIONS_SEL + " button", "Settings")`);
+  await sleep(300);
+  await evaluate(`[...document.querySelectorAll(".setting")].find((li) => li.textContent.includes("Password")).querySelector("button").click(), true`);
+  await until(`!!document.querySelector("[role=dialog]")`, 5_000, "the password window");
+  await sleep(300);
+  await shot("11-dialog", false);
+  await evaluate(`document.querySelector("[aria-label=Close]").click(), true`);
 
   step("lock and unlock");
-  await evaluate(`__click("nav.tabs button", "Settings")`);
-  await sleep(300);
   await evaluate(`[...document.querySelectorAll("button")].find((b) => b.textContent.includes("Lock now")).click(), true`);
   await until(`!!__byText("button", "Unlock")`, 5_000, "the lock screen");
   await evaluate(`__type(__field("Password"), "wrong password 99")`);
@@ -240,9 +259,9 @@ try {
   await shot("10-unlock-wrong");
   await evaluate(`__type(__field("Password"), "e2e password 1234")`);
   await evaluate(`__click("button", "Unlock")`);
-  await until(`!!document.querySelector("nav.tabs")`, 20_000, "the wallet again");
-  await until(`/Up to date/.test(document.querySelector(".sync")?.textContent ?? "")`, 60_000, "the sync after unlock");
-  step(`unlocked: ${await evaluate(`document.querySelector(".sync").textContent`)}`);
+  await until(`!!document.querySelector(SECTIONS_SEL)`, 20_000, "the wallet again");
+  await until(`/Up to date/.test(document.querySelector(".status-line")?.textContent ?? "")`, 60_000, "the sync after unlock");
+  step(`unlocked: ${await evaluate(`document.querySelector(".status-line").textContent`)}`);
   await sleep(4_000);
 
   // ---- what left the page ------------------------------------------------
