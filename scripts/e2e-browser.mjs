@@ -5,8 +5,9 @@
 //
 //   npm run build && node scripts/e2e-browser.mjs [out-dir]
 //
-// CHROME (path of chrome.exe) and E2E_WIDTH (default 1440; below 700 the page
-// is a phone's) can be set. The wallet is a throwaway one: its words are typed
+// CHROME (path of chrome.exe), E2E_WIDTH (default 1440; below 700 the page is
+// a phone's) and E2E_URL (a published copy, such as https://wallet.zoka.network;
+// by default the local build) can be set. The wallet is a throwaway one: its words are typed
 // by the script and never printed, and the screenshot of the words step blurs
 // them.
 import { spawn } from "node:child_process";
@@ -20,6 +21,7 @@ const WIDTH = Number(process.env.E2E_WIDTH ?? 1440);
 const PHONE = WIDTH < 700;
 const SECTIONS = `nav[aria-label="Wallet sections"]`;
 const PREVIEW = 8091;
+const SITE = (process.env.E2E_URL ?? `http://localhost:${PREVIEW}`).replace(/\/$/, "");
 const DEBUG = 9333 + Math.floor(Math.random() * 500);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 mkdirSync(OUT, { recursive: true });
@@ -47,11 +49,13 @@ async function waitHttp(url, ms = 30_000) {
 }
 
 // The built site, with the headers Cloudflare sends (vite.config.ts).
-const preview = spawn(process.execPath, ["node_modules/vite/bin/vite.js", "preview", "--port", String(PREVIEW), "--strictPort"], {
-  stdio: "ignore",
-});
-children.push(preview);
-await waitHttp(`http://localhost:${PREVIEW}/`);
+if (!process.env.E2E_URL) {
+  const preview = spawn(process.execPath, ["node_modules/vite/bin/vite.js", "preview", "--port", String(PREVIEW), "--strictPort"], {
+    stdio: "ignore",
+  });
+  children.push(preview);
+}
+await waitHttp(`${SITE}/`);
 
 // A Chrome of its own: another profile, no window, closed at the end.
 const profile = mkdtempSync(join(tmpdir(), "zokawallet-chrome-"));
@@ -174,8 +178,8 @@ const t0 = Date.now();
 const step = (text) => console.log(`[${((Date.now() - t0) / 1000).toFixed(1)} s] ${text}`);
 
 try {
-  step(`open http://localhost:${PREVIEW}/ at ${WIDTH} px`);
-  await page("Page.navigate", { url: `http://localhost:${PREVIEW}/` });
+  step(`open ${SITE}/ at ${WIDTH} px`);
+  await page("Page.navigate", { url: `${SITE}/` });
   await until(`!!__byText("button", "Create a wallet")`, 30_000, "the welcome page");
   await shot("01-welcome");
 
@@ -281,7 +285,7 @@ try {
   console.log(`console errors, exceptions and CSP violations: ${problems.length}`);
   for (const p of problems) console.log(`  ${p}`);
   writeFileSync(join(OUT, "report.json"), JSON.stringify({ width: WIDTH, counts, origins, leaked: leaked.length, problems }, null, 2));
-  const bad = origins.filter((o) => o !== `http://localhost:${PREVIEW}` && o !== "https://api.zokascan.cc");
+  const bad = origins.filter((o) => o !== new URL(SITE).origin && o !== "https://api.zokascan.cc");
   if (bad.length || leaked.length) {
     console.log(`FAIL: unexpected origins ${bad.join(", ")} or words leaked`);
     process.exitCode = 1;
