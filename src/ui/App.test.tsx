@@ -241,6 +241,25 @@ describe("the wallet's pages", () => {
     expect(screen.getByRole("button", { name: "Copy full address" })).toBeInTheDocument();
   });
 
+  it("links the same networks as zoka.network, before and after unlocking", async () => {
+    const expected = {
+      GitHub: "https://github.com/zoka-network",
+      "X / Twitter": "https://x.com/zokanetwork",
+      Discord: "https://discord.gg/uZRPcNb3m7",
+    };
+    const check = () => {
+      for (const [name, href] of Object.entries(expected)) expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
+    };
+    const fake = renderApp(base("locked"));
+    await screen.findByRole("button", { name: "Unlock" });
+    check();
+    await act(async () => {
+      fake.set(base("open", openWallet()));
+    });
+    await screen.findByRole("navigation", { name: "Wallet sections" });
+    check();
+  });
+
   it("locks from Settings", async () => {
     const fake = renderApp(base("open", openWallet()));
     fireEvent.click(await screen.findByRole("button", { name: "Settings" }));

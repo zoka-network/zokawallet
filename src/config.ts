@@ -5,6 +5,10 @@ export const API = "https://api.zokascan.cc";
 export const EXPLORER = "https://zokascan.cc";
 export const SITE = "https://zoka.network";
 export const SOURCE = "https://github.com/zoka-network/zokawallet";
+// The same networks, in the same order, as the footer of zoka.network.
+export const GITHUB = "https://github.com/zoka-network";
+export const X = "https://x.com/zokanetwork";
+export const DISCORD = "https://discord.gg/uZRPcNb3m7";
 
 /** Zoka Quantic Testnet v2: the only network a web wallet follows today. */
 export const NETWORK = 2;

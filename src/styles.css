@@ -115,6 +115,9 @@ a:hover { color: #ffe1f1; text-decoration: underline; text-underline-offset: 4px
 .site-footer nav { display: flex; flex-wrap: wrap; gap: 8px 22px; }
 .site-footer a { color: #8d8492; }
 .site-footer a:hover { color: var(--pink); text-decoration: none; }
+.site-footer-inner { align-items: center; }
+.socials { display: flex; align-items: center; gap: 20px; }
+.social { display: flex; align-items: center; justify-content: center; min-width: 32px; min-height: 36px; color: #8d8492; transition: color .2s; }
 
 /* Page head */
 .page-head { padding: 56px 0 0; }
