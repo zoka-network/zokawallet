@@ -10,7 +10,7 @@ export const GITHUB = "https://github.com/zoka-network";
 export const X = "https://x.com/zokanetwork";
 export const DISCORD = "https://discord.gg/uZRPcNb3m7";
 
-/** Zoka Quantic Testnet v2: the only network a web wallet follows today. */
+/** Zoka Quantic Testnet v3: the only network a web wallet follows today. */
 export const NETWORK = 2;
 export const NETWORK_NAME = "Zoka Quantic Testnet";
 
