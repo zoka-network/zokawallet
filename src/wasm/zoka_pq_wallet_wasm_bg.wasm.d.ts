@@ -15,6 +15,7 @@ export const webwallet_addressRecord: (a: number) => [number, number, number, nu
 export const webwallet_confirmCheckpoint: (a: number, b: number, c: number) => [number, number, number];
 export const webwallet_encodeState: (a: number) => [number, number, number, number];
 export const webwallet_inSync: (a: number) => number;
+export const webwallet_incomingViewKey: (a: number) => [number, number, number, number];
 export const webwallet_lastTransaction: (a: number) => [number, number, number, number];
 export const webwallet_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const webwallet_next: (a: number) => number;

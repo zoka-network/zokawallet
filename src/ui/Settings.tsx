@@ -92,7 +92,7 @@ export function Settings({ intent, onIntentDone }: { intent: SettingsIntent; onI
                 Show
               </button>
             </Setting>
-            <Setting icon="eye" title="View key" sub="Shows the balance, cannot spend">
+            <Setting icon="eye" title="View keys" sub="Share incoming payments, or the full history">
               <button type="button" className="btn small" onClick={() => setOpen("viewkey")}>
                 Show
               </button>
@@ -148,7 +148,7 @@ export function Settings({ intent, onIntentDone }: { intent: SettingsIntent; onI
 
       {open === "add" && <AddWallet onClose={close} />}
       {open === "phrase" && <Phrase onClose={close} />}
-      {open === "viewkey" && <ViewKey onClose={close} />}
+      {open === "viewkey" && <ViewKey key={wallet.id} onClose={close} />}
       {open === "password" && <ChangePassword onClose={close} />}
       {open === "forget" && <ForgetDialog onClose={close} />}
       {open && typeof open === "object" && <EditWallet wallet={open.edit} only={state.wallets.length === 1} onClose={close} />}
@@ -356,28 +356,47 @@ function Phrase({ onClose }: { onClose: () => void }) {
 
 function ViewKey({ onClose }: { onClose: () => void }) {
   const { client } = useWallet();
-  const [key, setKey] = useState<string | null>(null);
+  const [kind, setKind] = useState<"incoming" | "full">("incoming");
+  const [shown, setShown] = useState<{ kind: "incoming" | "full"; value: string } | null>(null);
+  const key = shown?.kind === kind ? shown.value : null;
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    setShown(null);
+    setError(null);
+    const request = kind === "incoming" ? client.incomingViewKey() : client.viewKey();
+    request.then(
+      (value) => { if (active) setShown({ kind, value }); },
+      (failure: Error) => { if (active) setError(failure.message); },
+    );
+    return () => { active = false; };
+  }, [client, kind]);
   return (
-    <Dialog title="View key" onClose={onClose}>
+    <Dialog title="View keys" onClose={onClose}>
+      <fieldset className="stack view-key-options">
+        <legend className="label">What to share</legend>
+        <label><input type="radio" name="view-key-kind" value="incoming" checked={kind === "incoming"} onChange={() => { setShown(null); setKind("incoming"); }} /> Incoming payments only</label>
+        <label><input type="radio" name="view-key-kind" value="full" checked={kind === "full"} onChange={() => { setShown(null); setKind("full"); }} /> Full history and balance</label>
+      </fieldset>
       <p className="muted">
-        The view key shows this wallet's balance and payments, for example in ZokaScan, and cannot spend. Whoever has it
-        sees every payment of the wallet: share it only with someone who should.
+        {kind === "incoming"
+          ? "The incoming view key shows received payments and memos, without your balance or outgoing payments."
+          : "The full view key shows your balance and every incoming and outgoing payment, past and future."}
+        {" "}Neither key can spend. Share only with someone who should have this access; it cannot be revoked.
       </p>
+      {kind === "incoming" && <p className="hint">Change from older wallets may appear as a received payment.</p>}
+      {error && <p role="alert" className="error">{error}</p>}
       {key ? (
         <>
           <div className="address-box scroll">
             <p className="mono">{key}</p>
           </div>
           <div className="actions">
-            <CopyButton text={key} label="Copy view key" />
+            <CopyButton text={key} label={kind === "incoming" ? "Copy incoming view key" : "Copy full view key"} />
           </div>
         </>
       ) : (
-        <div className="actions">
-          <button type="button" className="btn primary wide" onClick={() => client.viewKey().then(setKey)}>
-            Show the view key
-          </button>
-        </div>
+        !error && <p role="status" className="muted">Loading the view key…</p>
       )}
     </Dialog>
   );

@@ -70,3 +70,16 @@ wasm-pack build --release --target web --out-dir pkg --no-pack
 ```
 
 Then run `npm run update-wasm -- <node repository>` here.
+
+## Claves de vista (rama sin publicar)
+
+En Settings → View keys, la billetera deriva automáticamente la clave de
+entrantes de la cuenta abierta. No cambia la frase, la dirección ni la bóveda.
+Esa es la opción inicial; ver saldo y envíos requiere elegir Full history and
+balance. Al cerrar o bloquear la billetera se desmonta el diálogo. Las claves
+no se agregan al estado enviado por el Worker, a IndexedDB ni a pedidos de red.
+`viewKey()` conserva la clave completa; `incomingViewKey()` agrega la limitada.
+
+El motor actualizado marca el vuelto al crear pagos. Las claves de entrantes
+no pueden distinguir el vuelto histórico sin marca de otro ingreso; la
+interfaz lo explica. No se muestra ese total como saldo.

@@ -30,6 +30,11 @@ export class WebWallet {
     encodeState(): Uint8Array;
     inSync(): boolean;
     /**
+     * Solo lo recibido, sin saldo ni gastos. Se deriva de la misma cuenta:
+     * no hay que configurar ni migrar la billetera.
+     */
+    incomingViewKey(): string;
+    /**
      * Los bytes del último pago probado, para `POST /transactions`.
      */
     lastTransaction(): Uint8Array;
@@ -128,6 +133,7 @@ export interface InitOutput {
     readonly webwallet_confirmCheckpoint: (a: number, b: number, c: number) => [number, number, number];
     readonly webwallet_encodeState: (a: number) => [number, number, number, number];
     readonly webwallet_inSync: (a: number) => number;
+    readonly webwallet_incomingViewKey: (a: number) => [number, number, number, number];
     readonly webwallet_lastTransaction: (a: number) => [number, number, number, number];
     readonly webwallet_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly webwallet_next: (a: number) => number;

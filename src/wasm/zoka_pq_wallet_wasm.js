@@ -108,6 +108,29 @@ export class WebWallet {
         return ret !== 0;
     }
     /**
+     * Solo lo recibido, sin saldo ni gastos. Se deriva de la misma cuenta:
+     * no hay que configurar ni migrar la billetera.
+     * @returns {string}
+     */
+    incomingViewKey() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.webwallet_incomingViewKey(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * Los bytes del último pago probado, para `POST /transactions`.
      * @returns {Uint8Array}
      */

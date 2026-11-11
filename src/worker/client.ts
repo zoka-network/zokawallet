@@ -20,6 +20,7 @@ export interface WalletClient {
   forgetAll(): Promise<CoreState>;
   revealPhrase(password: string): Promise<string>;
   viewKey(): Promise<string>;
+  incomingViewKey(): Promise<string>;
   changePassword(current: string, next: string): Promise<void>;
   resolve(text: string): Promise<Recipient>;
   quote(amountAtoms: bigint): Promise<Quote>;
@@ -83,6 +84,7 @@ export function workerClient(worker: Worker): WalletClient {
     forgetAll: () => call("forgetAll"),
     revealPhrase: (password) => call("revealPhrase", password),
     viewKey: () => call("viewKey"),
+    incomingViewKey: () => call("incomingViewKey"),
     changePassword: (current, next) => call("changePassword", current, next),
     resolve: (text) => call("resolve", text),
     quote: (amountAtoms) => call("quote", amountAtoms),

@@ -613,6 +613,10 @@ export class WalletCore {
     return this.requireOpen().wallet.viewKey();
   }
 
+  incomingViewKey(): string {
+    return this.requireOpen().wallet.incomingViewKey();
+  }
+
   /** Seals everything again under a new password, in one write. */
   changePassword(current: string, next: string): Promise<void> {
     return this.exclusive(async () => {

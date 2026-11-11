@@ -89,6 +89,28 @@ async function dump(store: VaultStore): Promise<string> {
 }
 
 describe("the wallet core", () => {
+  it("derives both view keys automatically, keeps them local and refuses them while locked", async () => {
+    const { core, store, node, states } = await setup();
+    const phrase = core.newPhrase();
+    await core.create(PASSWORD, "Main", phrase);
+    const incoming = core.incomingViewKey();
+    const full = core.viewKey();
+    expect(incoming).toMatch(/^zqtestviewin2/);
+    expect(full).toMatch(/^zqtestview2/);
+    expect(incoming).not.toBe(full);
+    expect(JSON.stringify(states)).not.toContain(incoming);
+    expect(JSON.stringify(states)).not.toContain(full);
+    expect(JSON.stringify(node.calls)).not.toContain(incoming);
+    expect(await dump(store)).not.toContain(incoming);
+    core.lock();
+    expect(() => core.incomingViewKey()).toThrow();
+    expect(() => core.viewKey()).toThrow();
+    await core.unlock(PASSWORD);
+    expect(core.incomingViewKey()).toBe(incoming);
+    expect(core.viewKey()).toBe(full);
+    core.lock();
+  });
+
   it("creates a wallet whose words and name never reach the storage in the clear", async () => {
     const { core, store } = await setup();
     const phrase = core.newPhrase();

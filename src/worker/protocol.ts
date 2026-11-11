@@ -15,6 +15,7 @@ export const METHODS = [
   "forgetAll",
   "revealPhrase",
   "viewKey",
+  "incomingViewKey",
   "changePassword",
   "resolve",
   "quote",

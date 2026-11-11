@@ -76,7 +76,8 @@ function fakeClient(initial: CoreState) {
     removeWallet: async () => state,
     forgetAll: async () => set(base("empty")),
     revealPhrase: async () => PHRASE,
-    viewKey: async () => "zqview2key",
+    viewKey: async () => { calls.push("viewKey"); return "zqtestview2key"; },
+    incomingViewKey: async () => { calls.push("incomingViewKey"); return "zqtestviewin2key"; },
     changePassword: async () => undefined,
     resolve: async (text) => {
       if (!text.startsWith("zqtest2")) throw new Error("That is not a Zoka Quantic Testnet address");
@@ -268,5 +269,37 @@ describe("the wallet's pages", () => {
     });
     await waitFor(() => expect(fake.client.current()?.phase).toBe("locked"));
     expect(await screen.findByRole("button", { name: "Unlock" })).toBeInTheDocument();
+  });
+
+  it("shows incoming access by default and only reveals the full key after choosing it", async () => {
+    const fake = renderApp(base("open", openWallet()));
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    const setting = screen.getByText("View keys").closest("li")!;
+    fireEvent.click(within(setting).getByRole("button", { name: "Show" }));
+    expect(await screen.findByText("zqtestviewin2key")).toBeInTheDocument();
+    expect(fake.calls).toContain("incomingViewKey");
+    expect(fake.calls).not.toContain("viewKey");
+    expect(screen.getByRole("radio", { name: "Incoming payments only" })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "Full history and balance" }));
+    expect(screen.queryByText("zqtestviewin2key")).not.toBeInTheDocument();
+    expect(await screen.findByText("zqtestview2key")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy full view key" })).toBeInTheDocument();
+    await act(async () => { fake.set(base("locked")); });
+    expect(screen.queryByText("zqtestview2key")).not.toBeInTheDocument();
+  });
+
+  it("does not label a late full key as an incoming key", async () => {
+    const fake = renderApp(base("open", openWallet()));
+    let revealFull!: (value: string) => void;
+    fake.client.viewKey = () => new Promise((resolve) => { revealFull = resolve; });
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+    fireEvent.click(within(screen.getByText("View keys").closest("li")!).getByRole("button", { name: "Show" }));
+    await screen.findByText("zqtestviewin2key");
+    fireEvent.click(screen.getByRole("radio", { name: "Full history and balance" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Incoming payments only" }));
+    await act(async () => { revealFull("late-full-key"); });
+    expect(await screen.findByText("zqtestviewin2key")).toBeInTheDocument();
+    expect(screen.queryByText("late-full-key")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy incoming view key" })).toBeInTheDocument();
   });
 });
