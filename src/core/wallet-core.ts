@@ -66,8 +66,24 @@ export interface OpenWallet {
   pending: { txid: string; expiry: number } | null;
   /** A payment proved here that the network has not confirmed receiving. */
   unsent: string | null;
+  /** The other receive addresses of this wallet (point 4 of the 10/11 review). */
+  extra: ExtraAddress[];
+  /** Up to eight addresses, the main one included. */
+  canAddAddress: boolean;
   history: Movement[];
 }
+
+/** A receive address besides the main one: whoever pays it cannot tell it is this wallet. */
+export interface ExtraAddress {
+  index: number;
+  full: string;
+  short: string;
+  /** Its short address resolves for payers. */
+  published: boolean;
+}
+
+/** How many addresses one wallet can have, the main one included. */
+export const MAX_ADDRESSES = 8;
 
 export interface CoreState {
   phase: "loading" | "empty" | "locked" | "open";
@@ -148,6 +164,7 @@ export class WalletCore {
   private active: ActiveWallet | null = null;
   private wallet: WebWallet | null = null;
   private address = { full: "", short: "" };
+  private extra: { index: number; full: string; short: string }[] = [];
   private unsent: { txid: string; bytes: Uint8Array } | null = null;
   private record: string | null = null;
   private publishing = false;
@@ -206,6 +223,8 @@ export class WalletCore {
       maxSendable: status.max_sendable_atoms,
       pending: status.pending,
       unsent: this.unsent?.txid ?? null,
+      extra: this.extra.map((a) => ({ ...a, published: (this.active!.secret.publishedExtra ?? []).includes(a.index) })),
+      canAddAddress: this.extra.length + 1 < MAX_ADDRESSES,
       history: status.history,
     };
   }
@@ -319,12 +338,23 @@ export class WalletCore {
     }
     this.wallet = wallet;
     this.active = { id: record.id, order: record.order, secret };
+    // The addresses it had, before reading anything: a state read again
+    // from scratch still finds what came to each.
+    const want = Math.min(Math.max(secret.addresses ?? 1, 1), MAX_ADDRESSES);
+    while (wallet.addresses() < want) wallet.addAddress();
     this.address = { full: wallet.address(), short: wallet.shortAddress() };
+    this.extra = [];
+    for (let index = 1; index < wallet.addresses(); index++) {
+      this.extra.push({ index, full: wallet.addressAt(index), short: wallet.shortAddressAt(index) });
+    }
     this.savedMark = "";
     this.savedAt = state ? wallet.next() - 1 : -1;
     this.phase = "open";
     this.sync = { state: "syncing" };
     void this.follow(this.generation);
+    for (const { index } of this.extra) {
+      if (!(secret.publishedExtra ?? []).includes(index)) void this.publishExtra(this.generation, index);
+    }
   }
 
   /** Stops the sync and frees the WebAssembly wallet. */
@@ -338,6 +368,7 @@ export class WalletCore {
     this.wallet = null;
     this.active = null;
     this.address = { full: "", short: "" };
+    this.extra = [];
     this.unsent = null;
     this.record = null;
     this.publishing = false;
@@ -615,6 +646,52 @@ export class WalletCore {
 
   incomingViewKey(): string {
     return this.requireOpen().wallet.incomingViewKey();
+  }
+
+  /**
+   * Another receive address (point 4 of the 10/11 review): whoever pays two
+   * of them cannot tell they paid one wallet. Payments to it are found from
+   * the next block on, so it is made before it is given out; its short form
+   * is published right after.
+   */
+  async addAddress(): Promise<CoreState> {
+    const generation = this.generation;
+    const index = await this.exclusive(async () => {
+      const { wallet } = this.requireOpen();
+      if (wallet.addresses() >= MAX_ADDRESSES) {
+        throw new CoreError(`A wallet has at most ${MAX_ADDRESSES} addresses`);
+      }
+      const index = wallet.addAddress();
+      this.extra.push({ index, full: wallet.addressAt(index), short: wallet.shortAddressAt(index) });
+      await this.saveNow(generation);
+      return index;
+    });
+    await this.updateSecret(generation, { addresses: index + 1 });
+    this.emit();
+    void this.publishExtra(generation, index);
+    return this.snapshot();
+  }
+
+  /** Makes an extra address's short form resolve, as `publishAddress` does. */
+  private async publishExtra(generation: number, index: number): Promise<void> {
+    const address = this.extra.find((a) => a.index === index);
+    if (!address) return;
+    try {
+      const signal = this.controller.signal;
+      const known = await this.api.resolve(address.short, signal);
+      if (!this.live(generation) || !this.wallet) return;
+      if (!known || !this.wasm.matchesShort(known, address.short, NETWORK)) {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        if (!this.live(generation) || !this.wallet) return;
+        await this.api.publish(this.wallet.addressRecordAt(index), signal);
+        if (!this.live(generation)) return;
+      }
+      const published = [...new Set([...(this.active?.secret.publishedExtra ?? []), index])];
+      await this.updateSecret(generation, { publishedExtra: published });
+      this.emit();
+    } catch {
+      // Offline or busy: tried again the next time the wallet opens.
+    }
   }
 
   /** Seals everything again under a new password, in one write. */

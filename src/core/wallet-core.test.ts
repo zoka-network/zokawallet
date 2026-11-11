@@ -159,7 +159,10 @@ describe("the wallet core", () => {
     expect(states.at(-1)).toMatchObject({ phase: "empty", busy: null });
   });
 
-  it("reads real testnet pages, keeps them sealed and resumes from them", async () => {
+  // The recorded pages and checkpoint are of the v2 testnet, which the v3
+  // protocol does not read: recorded again from the v3 testnet after its
+  // genesis (HOJA-DE-RUTA, 11/11 tarde).
+  it.skip("reads real testnet pages, keeps them sealed and resumes from them", async () => {
     const node = new FakeNode();
     node.height = 3;
     node.pages.set(1, fixture("scan2-from1-count3.bin"));
@@ -186,6 +189,32 @@ describe("the wallet core", () => {
     expect(later.calls.filter((c) => c.startsWith("scan2"))).toEqual([]);
     expect(second.core.snapshot().wallet!.height).toBe(3);
     second.core.lock();
+  });
+
+  it("adds an address, publishes it and keeps it after locking", async () => {
+    const { core, node, states, factory } = await setup();
+    const created = await core.create(PASSWORD, "Main", core.newPhrase());
+    expect(created.wallet).toMatchObject({ extra: [], canAddAddress: true });
+    await until(() => states.at(-1)?.wallet?.published === true);
+    const added = await core.addAddress();
+    const extra = added.wallet!.extra;
+    expect(extra).toHaveLength(1);
+    expect(extra[0]).toMatchObject({ index: 1 });
+    expect(extra[0]!.full).not.toBe(created.wallet!.address);
+    expect(wasm.shortOf(extra[0]!.full, 2)).toBe(extra[0]!.short);
+    // Its short form is published like the main one's.
+    await until(() => states.at(-1)?.wallet?.extra[0]?.published === true);
+    expect(node.published.map((r) => JSON.parse(r).address)).toContain(extra[0]!.full);
+    core.lock();
+
+    // Opened again, here or in another tab: the same addresses.
+    const again = await setup(new FakeNode(), factory);
+    const reopened = await again.core.unlock(PASSWORD);
+    expect(reopened.wallet!.extra.map((a) => a.full)).toEqual([extra[0]!.full]);
+    for (let i = 2; i < 8; i++) await again.core.addAddress();
+    expect(again.core.snapshot().wallet!.canAddAddress).toBe(false);
+    await expect(again.core.addAddress()).rejects.toThrow("at most 8");
+    again.core.lock();
   });
 
   it("publishes its short address with a stamp found here, and only once", async () => {

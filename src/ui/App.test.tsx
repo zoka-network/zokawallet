@@ -24,6 +24,8 @@ function openWallet(change: Partial<OpenWallet> = {}): OpenWallet {
     maxSendable: 5_019_799_000_000,
     pending: null,
     unsent: null,
+    extra: [],
+    canAddAddress: true,
     history: [],
     ...change,
   };
@@ -77,6 +79,7 @@ function fakeClient(initial: CoreState) {
     forgetAll: async () => set(base("empty")),
     revealPhrase: async () => PHRASE,
     viewKey: async () => { calls.push("viewKey"); return "zqtestview2key"; },
+    addAddress: async () => { calls.push("addAddress"); return state; },
     incomingViewKey: async () => { calls.push("incomingViewKey"); return "zqtestviewin2key"; },
     changePassword: async () => undefined,
     resolve: async (text) => {
@@ -240,6 +243,19 @@ describe("the wallet's pages", () => {
     expect(screen.getByText("zqtest2short")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Full address/ }));
     expect(screen.getByRole("button", { name: "Copy full address" })).toBeInTheDocument();
+  });
+
+  it("lists the other addresses, shows one's QR and adds another", async () => {
+    const extra = [{ index: 1, full: "zqtest2" + "E".repeat(1700), short: "zqtest2second", published: false }];
+    const fake = renderApp(base("open", openWallet({ extra })));
+    await screen.findByRole("navigation", { name: "Wallet sections" });
+    fireEvent.click(section("Receive"));
+    expect(await screen.findByText("zqtest2second")).toBeInTheDocument();
+    expect(screen.getByText("activating…")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "#1" }));
+    expect(await screen.findByRole("img", { name: "QR code of address 1" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "New address" }));
+    await waitFor(() => expect(fake.calls).toContain("addAddress"));
   });
 
   it("links the same networks as zoka.network, before and after unlocking", async () => {

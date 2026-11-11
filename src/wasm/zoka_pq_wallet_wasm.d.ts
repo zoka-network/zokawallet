@@ -5,11 +5,28 @@ export class WebWallet {
     free(): void;
     [Symbol.dispose](): void;
     /**
+     * Una dirección más para dar a otra persona: quienes pagan a dos
+     * direcciones distintas no pueden saber que pagaron a la misma billetera.
+     * Hasta ocho; cada una es un descifrado más por salida leída. Lee los
+     * pagos a la nueva desde el próximo bloque, así que hay que crearla antes
+     * de darla. Devuelve su número.
+     */
+    addAddress(): number;
+    /**
      * Lee una página de `/scan2` (tiene que empezar en [`WebWallet::next`]);
      * devuelve la punta que tenía el servidor. Cada bloque se compara con su
      * cabecera: una página que esconde o inventa una salida se rechaza.
      */
     addPage(bytes: Uint8Array | number[]): number;
+    /**
+     * La dirección completa número `index` (0 es la principal).
+     */
+    addressAt(index: number): string;
+    /**
+     * Igual que [`WebWallet::address_record`], para la dirección número
+     * `index`: así su corta también sirve.
+     */
+    addressRecordAt(index: number): string;
     /**
      * El registro de la dirección corta para `POST /address`, con su
      * estampilla Argon2id (unos segundos: llamarla en un Worker).
@@ -19,6 +36,10 @@ export class WebWallet {
      * La dirección completa (unos 1.760 caracteres).
      */
     address(): string;
+    /**
+     * Cuántas direcciones lee: la principal y las que se sumaron.
+     */
+    addresses(): number;
     /**
      * Verifica la firma del checkpoint (el JSON de `/checkpoint`) y confirma
      * lo leído contra él. `true` si esa altura ya se leyó.
@@ -63,6 +84,10 @@ export class WebWallet {
      */
     release(): void;
     /**
+     * La dirección corta número `index`.
+     */
+    shortAddressAt(index: number): string;
+    /**
      * La dirección corta: la que se comparte y va en el QR.
      */
     shortAddress(): string;
@@ -72,7 +97,8 @@ export class WebWallet {
      */
     status(): string;
     /**
-     * Muestra el saldo a quien la tenga, sin poder gastar.
+     * Muestra el saldo de la dirección principal a quien la tenga, sin poder
+     * gastar. Cada dirección tiene la suya.
      */
     viewKey(): string;
 }
@@ -127,9 +153,13 @@ export interface InitOutput {
     readonly qrMatrix: (a: number, b: number) => [number, number, number, number];
     readonly shortOf: (a: number, b: number, c: number) => [number, number];
     readonly validPhrase: (a: number, b: number) => number;
+    readonly webwallet_addAddress: (a: number) => [number, number, number];
     readonly webwallet_addPage: (a: number, b: number, c: number) => [number, number, number];
     readonly webwallet_address: (a: number) => [number, number, number, number];
+    readonly webwallet_addressAt: (a: number, b: number) => [number, number, number, number];
     readonly webwallet_addressRecord: (a: number) => [number, number, number, number];
+    readonly webwallet_addressRecordAt: (a: number, b: number) => [number, number, number, number];
+    readonly webwallet_addresses: (a: number) => number;
     readonly webwallet_confirmCheckpoint: (a: number, b: number, c: number) => [number, number, number];
     readonly webwallet_encodeState: (a: number) => [number, number, number, number];
     readonly webwallet_inSync: (a: number) => number;
@@ -141,6 +171,7 @@ export interface InitOutput {
     readonly webwallet_quote: (a: number, b: bigint) => [number, number];
     readonly webwallet_release: (a: number) => void;
     readonly webwallet_shortAddress: (a: number) => [number, number, number, number];
+    readonly webwallet_shortAddressAt: (a: number, b: number) => [number, number, number, number];
     readonly webwallet_status: (a: number) => [number, number];
     readonly webwallet_viewKey: (a: number) => [number, number, number, number];
     readonly __wbindgen_exn_store: (a: number) => void;

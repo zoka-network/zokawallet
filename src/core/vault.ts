@@ -42,6 +42,10 @@ export interface WalletSecret {
   created: number;
   /** Its short address resolves at the public node. */
   published: boolean;
+  /** How many receive addresses it has (the main one counts; missing: 1). */
+  addresses?: number;
+  /** The extra addresses whose short form resolves at the public node. */
+  publishedExtra?: number[];
 }
 
 export class VaultError extends Error {}

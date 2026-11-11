@@ -65,8 +65,65 @@ export function Receive() {
               </div>
             )}
           </Panel>
+          <MoreAddresses />
         </div>
       </div>
     </>
+  );
+}
+
+// Point 4 of the 10/11 review: another address for each person who pays.
+// They cannot tell they paid the same wallet; everything adds to one balance.
+function MoreAddresses() {
+  const { client, state } = useWallet();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [shown, setShown] = useState<number | null>(null);
+  const wallet = state?.wallet;
+  if (!wallet) return null;
+  const add = () => {
+    setBusy(true);
+    setError(null);
+    client
+      .addAddress()
+      .then((next) => setShown(next.wallet?.extra.at(-1)?.index ?? null))
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setBusy(false));
+  };
+  const current = wallet.extra.find((a) => a.index === shown);
+  return (
+    <Panel
+      title={`More addresses · ${wallet.extra.length} of 7`}
+      action={
+        <button type="button" className="btn small" onClick={add} disabled={busy || !wallet.canAddAddress}>
+          {busy ? "Adding…" : "New address"}
+        </button>
+      }
+    >
+      <div className="panel-body stack">
+        <p className="hint">
+          Give a different address to each person who pays you: they cannot tell they paid the same wallet. Everything
+          arrives in this balance. Create it before giving it out: payments to it are found from then on.
+        </p>
+        {wallet.extra.map((a) => (
+          <div key={a.index} className="actions start" style={{ alignItems: "center" }}>
+            <button type="button" className="btn small" onClick={() => setShown(shown === a.index ? null : a.index)}>
+              #{a.index}
+            </button>
+            <span className="mono grow" style={{ overflowWrap: "anywhere" }}>
+              {a.short}
+            </span>
+            <CopyButton text={a.short} label="Copy" small />
+            {!a.published && <span className="hint">activating…</span>}
+          </div>
+        ))}
+        {current && (
+          <div className="qr-panel">
+            <Qr text={current.short} label={`QR code of address ${current.index}`} />
+          </div>
+        )}
+        {error && <p className="hint" role="alert">{error}</p>}
+      </div>
+    </Panel>
   );
 }

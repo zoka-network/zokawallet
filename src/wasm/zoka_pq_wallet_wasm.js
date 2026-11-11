@@ -12,6 +12,21 @@ export class WebWallet {
         wasm.__wbg_webwallet_free(ptr, 0);
     }
     /**
+     * Una dirección más para dar a otra persona: quienes pagan a dos
+     * direcciones distintas no pueden saber que pagaron a la misma billetera.
+     * Hasta ocho; cada una es un descifrado más por salida leída. Lee los
+     * pagos a la nueva desde el próximo bloque, así que hay que crearla antes
+     * de darla. Devuelve su número.
+     * @returns {number}
+     */
+    addAddress() {
+        const ret = wasm.webwallet_addAddress(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
      * Lee una página de `/scan2` (tiene que empezar en [`WebWallet::next`]);
      * devuelve la punta que tenía el servidor. Cada bloque se compara con su
      * cabecera: una página que esconde o inventa una salida se rechaza.
@@ -26,6 +41,53 @@ export class WebWallet {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ret[0] >>> 0;
+    }
+    /**
+     * La dirección completa número `index` (0 es la principal).
+     * @param {number} index
+     * @returns {string}
+     */
+    addressAt(index) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.webwallet_addressAt(this.__wbg_ptr, index);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * Igual que [`WebWallet::address_record`], para la dirección número
+     * `index`: así su corta también sirve.
+     * @param {number} index
+     * @returns {string}
+     */
+    addressRecordAt(index) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.webwallet_addressRecordAt(this.__wbg_ptr, index);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
     }
     /**
      * El registro de la dirección corta para `POST /address`, con su
@@ -71,6 +133,14 @@ export class WebWallet {
         } finally {
             wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
         }
+    }
+    /**
+     * Cuántas direcciones lee: la principal y las que se sumaron.
+     * @returns {number}
+     */
+    addresses() {
+        const ret = wasm.webwallet_addresses(this.__wbg_ptr);
+        return ret >>> 0;
     }
     /**
      * Verifica la firma del checkpoint (el JSON de `/checkpoint`) y confirma
@@ -243,6 +313,29 @@ export class WebWallet {
         wasm.webwallet_release(this.__wbg_ptr);
     }
     /**
+     * La dirección corta número `index`.
+     * @param {number} index
+     * @returns {string}
+     */
+    shortAddressAt(index) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.webwallet_shortAddressAt(this.__wbg_ptr, index);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
      * La dirección corta: la que se comparte y va en el QR.
      * @returns {string}
      */
@@ -282,7 +375,8 @@ export class WebWallet {
         }
     }
     /**
-     * Muestra el saldo a quien la tenga, sin poder gastar.
+     * Muestra el saldo de la dirección principal a quien la tenga, sin poder
+     * gastar. Cada dirección tiene la suya.
      * @returns {string}
      */
     viewKey() {
