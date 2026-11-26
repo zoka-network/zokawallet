@@ -323,6 +323,41 @@ describe("the wallet core", () => {
     core.lock();
   });
 
+  it("reads an exchange's integrated address: its short address and its customer code", async () => {
+    // The node's fixed vector (zoka-pq-pool, integrated.rs): the testnet short
+    // address of test seed 2 (entropy 0x02 × 32) with customer code 42.
+    const seed2 = "acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount exchange";
+    const short = "zqtest22m1iDEYKpaemBFZMVj2k1SAzEV9BGL1uFXRZVABUrvAYuHQRbj";
+    const integrated = "zqtesti23jYjdoHfKWvz5DDUPwYYXACN7eAWX8qdEVQRw5uAGAeCskj7rGtZtrKFb16E2";
+    expect(wasm.addressKind(integrated, 2)).toBe("integrated");
+    expect(wasm.integratedShort(integrated, 2)).toBe(short);
+    expect(wasm.integratedTag(integrated, 2)).toBe("42");
+    expect(wasm.addressKind(integrated.replace("zqtesti2", "zqi2"), 2)).toBe("");
+    expect(wasm.tagMemo("42", "")).toBe("zoka-tag:42");
+    expect(wasm.tagMemo("42", "order 7")).toBe("zoka-tag:42\norder 7");
+
+    const node = new FakeNode();
+    const { core } = await setup(node);
+    await core.create(PASSWORD, "Main", core.newPhrase());
+    const exchange = new wasm.WebWallet(seed2, 2, new Uint8Array());
+    const eve = new wasm.WebWallet(wasm.newPhrase(), 2, new Uint8Array());
+    expect(exchange.shortAddress()).toBe(short);
+
+    await expect(core.resolve(integrated)).rejects.toThrow("Nobody has published");
+    expect(node.calls).toContain(`resolve:${short}`);
+    node.directory.set(short, eve.address());
+    await expect(core.resolve(integrated)).rejects.toThrow("does not match");
+    node.directory.set(short, exchange.address());
+    expect(await core.resolve(`zoka:${integrated}?amount=3`)).toEqual({ full: exchange.address(), short, tag: "42", amount: "3" });
+
+    // The code takes room from the note: 512 bytes in all.
+    const room = 512 - "zoka-tag:42\n".length;
+    await expect(core.send(exchange.address(), 1_000_000n, "x".repeat(room + 1), "42")).rejects.toThrow(`${room} bytes at most`);
+    exchange.free();
+    eve.free();
+    core.lock();
+  });
+
   it("says why an empty wallet cannot pay", async () => {
     const { core } = await setup();
     await core.create(PASSWORD, "Main", core.newPhrase());

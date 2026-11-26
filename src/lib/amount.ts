@@ -40,3 +40,11 @@ export function atomsToInput(atoms: bigint): string {
 export function memoBytes(memo: string): number {
   return new TextEncoder().encode(memo).length;
 }
+
+/**
+ * The bytes of the note a payment to an integrated address carries: its
+ * customer code (`zoka-tag:<code>`) and, on the next line, the payer's note.
+ */
+export function tagNoteBytes(tag: string, note: string): number {
+  return memoBytes(note ? `zoka-tag:${tag}\n${note}` : `zoka-tag:${tag}`);
+}

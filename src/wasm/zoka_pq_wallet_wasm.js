@@ -401,7 +401,8 @@ export class WebWallet {
 if (Symbol.dispose) WebWallet.prototype[Symbol.dispose] = WebWallet.prototype.free;
 
 /**
- * `"full"`, `"short"` o `""` si no es una dirección de `network`.
+ * `"full"`, `"short"`, `"integrated"` o `""` si no es una dirección de
+ * `network`.
  * @param {string} text
  * @param {number} network
  * @returns {string}
@@ -454,6 +455,52 @@ export function deriveKey(password, salt, memory_kib, iterations) {
     var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v5;
+}
+
+/**
+ * La corta que lleva una dirección integrada (la de un exchange), para
+ * resolverla como cualquier corta; `""` si no lo es.
+ * @param {string} text
+ * @param {number} network
+ * @returns {string}
+ */
+export function integratedShort(text, network) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const val2 = +network;
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.integratedShort(ptr0, len0, val2);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * El código de cliente de una dirección integrada, en decimal (un `u64` no
+ * entra en un número de JavaScript); `""` si no lo es.
+ * @param {string} text
+ * @param {number} network
+ * @returns {string}
+ */
+export function integratedTag(text, network) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const val2 = +network;
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.integratedTag(ptr0, len0, val2);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
 }
 
 /**
@@ -542,6 +589,43 @@ export function shortOf(full, network) {
         return getStringFromWasm0(ret[0], ret[1]);
     } finally {
         wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * El memo de un pago a una dirección integrada: `zoka-tag:<código>` y la
+ * nota de quien paga en la línea siguiente. Falla si no entra en 512 bytes.
+ * @param {string} tag
+ * @param {string} note
+ * @returns {string}
+ */
+export function tagMemo(tag, note) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passStringToWasm0(tag, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(note, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        const ret = wasm.tagMemo(ptr0, len0, ptr1, len1);
+        var ptr3 = ret[0];
+        var len3 = ret[1];
+        if (ret[3]) {
+            ptr3 = 0; len3 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred4_0 = ptr3;
+        deferred4_1 = len3;
+        return getStringFromWasm0(ptr3, len3);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
     }
 }
 

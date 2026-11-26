@@ -7,7 +7,7 @@
 
 import type * as WasmModule from "../wasm/zoka_pq_wallet_wasm.js";
 import { CHECKPOINT_EVERY_MS, KDF, MEMO_BYTES, MIN_PASSWORD, NETWORK, PAGE_BLOCKS, POLL_MS } from "../config";
-import { memoBytes } from "../lib/amount";
+import { memoBytes, tagNoteBytes } from "../lib/amount";
 import { parsePaymentText } from "../lib/payment";
 import { ApiError, type Api } from "./api";
 import {
@@ -30,7 +30,17 @@ import {
 
 export type Wasm = Pick<
   typeof WasmModule,
-  "WebWallet" | "newPhrase" | "validPhrase" | "addressKind" | "matchesShort" | "shortOf" | "deriveKey" | "qrMatrix"
+  | "WebWallet"
+  | "newPhrase"
+  | "validPhrase"
+  | "addressKind"
+  | "matchesShort"
+  | "shortOf"
+  | "integratedShort"
+  | "integratedTag"
+  | "tagMemo"
+  | "deriveKey"
+  | "qrMatrix"
 >;
 type WebWallet = WasmModule.WebWallet;
 
@@ -98,7 +108,13 @@ export interface Recipient {
   full: string;
   short: string;
   amount?: string;
+  /**
+   * The customer code of an exchange's integrated address, in decimal: the
+   * payment carries it in its encrypted note so the exchange knows whose it is.
+   */
+  tag?: string;
 }
+
 
 export interface Quote {
   enough: boolean;
@@ -726,21 +742,29 @@ export class WalletCore {
   /**
    * Who a payment goes to. A short address is looked up at the public node,
    * and its answer is checked here: the short address is a digest of the full
-   * one, so the node cannot hand over somebody else's.
+   * one, so the node cannot hand over somebody else's. An exchange's
+   * integrated address is its short address plus a customer code.
    */
   async resolve(text: string): Promise<Recipient> {
     const { address, amount } = parsePaymentText(text);
     const kind = this.wasm.addressKind(address, NETWORK);
     if (kind === "full") return { full: address, short: this.wasm.shortOf(address, NETWORK), ...(amount ? { amount } : {}) };
-    if (kind !== "short") throw new CoreError("That is not a Zoka Quantic Testnet address");
-    const full = await this.api.resolve(address, this.controller.signal);
+    let short = address;
+    let tag: string | undefined;
+    if (kind === "integrated") {
+      short = this.wasm.integratedShort(address, NETWORK);
+      tag = this.wasm.integratedTag(address, NETWORK);
+    } else if (kind !== "short") {
+      throw new CoreError("That is not a Zoka Quantic Testnet address");
+    }
+    const full = await this.api.resolve(short, this.controller.signal);
     if (!full) {
       throw new CoreError("Nobody has published that short address yet: ask for the full address");
     }
-    if (!this.wasm.matchesShort(full, address, NETWORK)) {
+    if (!this.wasm.matchesShort(full, short, NETWORK)) {
       throw new CoreError("The node answered with an address that does not match: payment stopped");
     }
-    return { full, short: address, ...(amount ? { amount } : {}) };
+    return { full, short, ...(tag !== undefined ? { tag } : {}), ...(amount ? { amount } : {}) };
   }
 
   quote(amountAtoms: bigint): Quote {
@@ -750,14 +774,27 @@ export class WalletCore {
   /**
    * Proves the payment here (seconds of WebAssembly), keeps its notes
    * reserved, and hands it to the public node, which relays it to the miners.
+   * With `tag` (an integrated address's customer code), the note starts with
+   * it, as the exchange's wallet reads it.
    */
-  send(to: string, amountAtoms: bigint, memo: string): Promise<Sent> {
+  send(to: string, amountAtoms: bigint, memo: string, tag?: string): Promise<Sent> {
     return this.exclusive(async () => {
       const { wallet } = this.requireOpen();
       const generation = this.generation;
       if (this.unsent) throw new CoreError("A payment is still waiting to reach the network");
       if (memoBytes(memo) > MEMO_BYTES) throw new CoreError(`The note can have ${MEMO_BYTES} bytes at most`);
+      if (tag !== undefined && tagNoteBytes(tag, memo) > MEMO_BYTES) {
+        throw new CoreError(`With this customer code the note can have ${MEMO_BYTES - tagNoteBytes(tag, "") - 1} bytes at most`);
+      }
       if (this.wasm.addressKind(to, NETWORK) !== "full") throw new CoreError("Pay to a full address");
+      let note = memo;
+      if (tag !== undefined) {
+        try {
+          note = this.wasm.tagMemo(tag, memo);
+        } catch (error) {
+          throw new CoreError(messageOf(error));
+        }
+      }
       this.busy = "proving";
       this.emit();
       let proved: Omit<Sent, "delivered">;
@@ -765,7 +802,7 @@ export class WalletCore {
       try {
         // Let the page draw "proving" before the Worker is busy for seconds.
         await new Promise((resolve) => setTimeout(resolve, 30));
-        proved = JSON.parse(wallet.prove(to, amountAtoms, memo)) as Omit<Sent, "delivered">;
+        proved = JSON.parse(wallet.prove(to, amountAtoms, note)) as Omit<Sent, "delivered">;
         bytes = wallet.lastTransaction();
       } catch (error) {
         this.busy = null;

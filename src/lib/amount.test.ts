@@ -1,4 +1,4 @@
-import { AmountError, atomsToInput, formatZka, memoBytes, parseZka } from "./amount";
+import { AmountError, atomsToInput, formatZka, memoBytes, parseZka, tagNoteBytes } from "./amount";
 
 describe("amounts", () => {
   it("reads what a person types, exactly, in atoms", () => {
@@ -31,5 +31,10 @@ describe("amounts", () => {
     expect(memoBytes("abc")).toBe(3);
     expect(memoBytes("ñ")).toBe(2);
     expect(memoBytes("🙂")).toBe(4);
+  });
+
+  it("counts what a customer code adds to the note", () => {
+    expect(tagNoteBytes("42", "")).toBe("zoka-tag:42".length);
+    expect(tagNoteBytes("42", "ñ")).toBe("zoka-tag:42".length + 1 + 2);
   });
 });

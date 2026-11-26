@@ -104,7 +104,8 @@ export class WebWallet {
 }
 
 /**
- * `"full"`, `"short"` o `""` si no es una dirección de `network`.
+ * `"full"`, `"short"`, `"integrated"` o `""` si no es una dirección de
+ * `network`.
  */
 export function addressKind(text: string, network: number): string;
 
@@ -115,6 +116,18 @@ export function addressKind(text: string, network: number): string;
  * de un segundo: llamarla en el Worker.
  */
 export function deriveKey(password: string, salt: Uint8Array | number[], memory_kib: number, iterations: number): Uint8Array;
+
+/**
+ * La corta que lleva una dirección integrada (la de un exchange), para
+ * resolverla como cualquier corta; `""` si no lo es.
+ */
+export function integratedShort(text: string, network: number): string;
+
+/**
+ * El código de cliente de una dirección integrada, en decimal (un `u64` no
+ * entra en un número de JavaScript); `""` si no lo es.
+ */
+export function integratedTag(text: string, network: number): string;
 
 /**
  * Si la dirección completa `full` (la que devuelve `/address/<corta>`) es la
@@ -139,6 +152,12 @@ export function qrMatrix(text: string): Uint8Array;
  */
 export function shortOf(full: string, network: number): string;
 
+/**
+ * El memo de un pago a una dirección integrada: `zoka-tag:<código>` y la
+ * nota de quien paga en la línea siguiente. Falla si no entra en 512 bytes.
+ */
+export function tagMemo(tag: string, note: string): string;
+
 export function validPhrase(phrase: string): boolean;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -148,10 +167,13 @@ export interface InitOutput {
     readonly __wbg_webwallet_free: (a: number, b: number) => void;
     readonly addressKind: (a: number, b: number, c: number) => [number, number];
     readonly deriveKey: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
+    readonly integratedShort: (a: number, b: number, c: number) => [number, number];
+    readonly integratedTag: (a: number, b: number, c: number) => [number, number];
     readonly matchesShort: (a: number, b: number, c: number, d: number, e: number) => number;
     readonly newPhrase: () => [number, number, number, number];
     readonly qrMatrix: (a: number, b: number) => [number, number, number, number];
     readonly shortOf: (a: number, b: number, c: number) => [number, number];
+    readonly tagMemo: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly validPhrase: (a: number, b: number) => number;
     readonly webwallet_addAddress: (a: number) => [number, number, number];
     readonly webwallet_addPage: (a: number, b: number, c: number) => [number, number, number];

@@ -25,7 +25,7 @@ export interface WalletClient {
   changePassword(current: string, next: string): Promise<void>;
   resolve(text: string): Promise<Recipient>;
   quote(amountAtoms: bigint): Promise<Quote>;
-  send(to: string, amountAtoms: bigint, memo: string): Promise<Sent>;
+  send(to: string, amountAtoms: bigint, memo: string, tag?: string): Promise<Sent>;
   resubmit(): Promise<boolean>;
   cancelUnsent(): Promise<CoreState>;
   qr(text: string): Promise<Uint8Array>;
@@ -90,7 +90,7 @@ export function workerClient(worker: Worker): WalletClient {
     changePassword: (current, next) => call("changePassword", current, next),
     resolve: (text) => call("resolve", text),
     quote: (amountAtoms) => call("quote", amountAtoms),
-    send: (to, amountAtoms, memo) => call("send", to, amountAtoms, memo),
+    send: (to, amountAtoms, memo, tag) => call("send", to, amountAtoms, memo, tag),
     resubmit: () => call("resubmit"),
     cancelUnsent: () => call("cancelUnsent"),
     qr: (text) => call("qr", text),

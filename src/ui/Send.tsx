@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { EXPLORER, MEMO_BYTES } from "../config";
 import type { Recipient, Sent } from "../core/wallet-core";
-import { AmountError, atomsToInput, formatZka, memoBytes, parseZka } from "../lib/amount";
+import { AmountError, atomsToInput, formatZka, memoBytes, parseZka, tagNoteBytes } from "../lib/amount";
 import { middle, parsePaymentText } from "../lib/payment";
 import { CopyButton, Field, Icon, PageHead, Panel, useElapsed } from "./components";
 import { useWallet } from "./context";
@@ -64,6 +64,11 @@ export function Send({ initial, onDone, onActivity }: { initial?: string; onDone
         return null;
       });
       if (!recipient) return;
+      if (recipient.tag !== undefined && tagNoteBytes(recipient.tag, memo) > MEMO_BYTES) {
+        const room = MEMO_BYTES - tagNoteBytes(recipient.tag, "") - 1;
+        setError({ field: "memo", text: `This address carries a customer code: the note can have ${room} bytes at most` });
+        return;
+      }
       const quote = await client.quote(atoms);
       if (!quote.enough) {
         setError({ field: "amount", text: quote.reason ?? "Not enough ZKA for this payment" });
@@ -77,7 +82,7 @@ export function Send({ initial, onDone, onActivity }: { initial?: string; onDone
 
   const send = (target: Extract<Step, { step: "review" }>) => {
     setFlow({ step: "working" });
-    client.send(target.recipient.full, target.amount, target.memo).then(
+    client.send(target.recipient.full, target.amount, target.memo, target.recipient.tag).then(
       (sent) => setFlow({ step: "done", sent }),
       (e: Error) => setFlow({ step: "failed", error: e.message }),
     );
@@ -163,6 +168,19 @@ export function Send({ initial, onDone, onActivity }: { initial?: string; onDone
             </span>
             {flow.recipient.short && <span className="hint" style={{ display: "block", marginTop: 4 }}>Full address checked against this short address here.</span>}
           </dd>
+          {flow.recipient.tag !== undefined && (
+            <>
+              <dt>Customer code</dt>
+              <dd>
+                <span className="mono" style={{ fontSize: 13 }}>
+                  {flow.recipient.tag}
+                </span>
+                <span className="hint" style={{ display: "block", marginTop: 4 }}>
+                  Part of the address: it travels encrypted in the note, so the recipient knows the payment is yours.
+                </span>
+              </dd>
+            </>
+          )}
           <dt>Amount</dt>
           <dd>{formatZka(flow.amount)} ZKA</dd>
           <dt>Network fee</dt>
@@ -199,7 +217,7 @@ export function Send({ initial, onDone, onActivity }: { initial?: string; onDone
         <Field
           label="To"
           error={error?.field === "to" ? error.text : null}
-          hint="A short or a full Zoka Quantic Testnet address."
+          hint="A short, full or exchange deposit (integrated) Zoka Quantic Testnet address."
           right={
             <div className="row" style={{ gap: 14 }}>
               {navigator.clipboard?.readText && (
