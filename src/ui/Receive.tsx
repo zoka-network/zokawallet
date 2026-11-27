@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CopyButton, Icon, PageHead, Panel, Qr } from "./components";
 import { useWallet } from "./context";
+import { ZokaIdRow } from "./ZokaId";
 
 // The short address is the one to share (and the one in the QR, as in
 // ZKAPriv). The full one always works, also before the short one resolves.
@@ -43,6 +44,8 @@ export function Receive() {
                   <CopyButton text={wallet.short} label="Copy address" />
                 </div>
                 <p className="hint">The payer's wallet turns it into the full address and checks that both belong together.</p>
+                <ZokaIdRow short={wallet.short} />
+                <p className="hint">The payer's wallet shows this code before sending: read it to them to confirm it is you.</p>
               </div>
             </Panel>
           )}
@@ -118,9 +121,12 @@ function MoreAddresses() {
           </div>
         ))}
         {current && (
-          <div className="qr-panel">
-            <Qr text={current.short} label={`QR code of address ${current.index}`} />
-          </div>
+          <>
+            <div className="qr-panel">
+              <Qr text={current.short} label={`QR code of address ${current.index}`} />
+            </div>
+            <ZokaIdRow short={current.short} label={`Zoka ID of address #${current.index}`} />
+          </>
         )}
         {error && <p className="hint" role="alert">{error}</p>}
       </div>

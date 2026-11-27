@@ -6,6 +6,7 @@ import { middle, parsePaymentText } from "../lib/payment";
 import { CopyButton, Field, Icon, PageHead, Panel, useElapsed } from "./components";
 import { useWallet } from "./context";
 import { Scanner, canScan } from "./Scanner";
+import { ZokaIdRow } from "./ZokaId";
 
 type Step =
   | { step: "form" }
@@ -168,6 +169,17 @@ export function Send({ initial, onDone, onActivity }: { initial?: string; onDone
             </span>
             {flow.recipient.short && <span className="hint" style={{ display: "block", marginTop: 4 }}>Full address checked against this short address here.</span>}
           </dd>
+          {flow.recipient.short && (
+            <>
+              <dt>Zoka ID</dt>
+              <dd>
+                <ZokaIdRow short={flow.recipient.short} label="" />
+                <span className="hint" style={{ display: "block", marginTop: 6 }}>
+                  Ask the recipient for their code and compare it before you send.
+                </span>
+              </dd>
+            </>
+          )}
           {flow.recipient.tag !== undefined && (
             <>
               <dt>Customer code</dt>

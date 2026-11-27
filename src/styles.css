@@ -401,3 +401,9 @@ a:hover { color: #ffe1f1; text-decoration: underline; text-underline-offset: 4px
   .stats { grid-template-columns: minmax(0, 1fr); }
   .section-link { font-size: 9px; letter-spacing: .06em; }
 }
+
+/* Zoka ID: the mosaic and code of an address (docs/ZOKA-ID.md of the node). */
+.zoka-id { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.zoka-id .label { display: block; margin-bottom: 4px; }
+.zoka-id-mosaic { flex: none; display: block; }
+.zoka-id-code { display: block; font-family: var(--mono); font-size: 14px; letter-spacing: .04em; color: var(--text); white-space: nowrap; }
