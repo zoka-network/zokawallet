@@ -1,7 +1,7 @@
 # Zoka Web Wallet
 
 The web wallet of Zoka Quantic, served at `wallet.zoka.network`. It runs on the
-Zoka Quantic Testnet (v2) only.
+Zoka Quantic Testnet (v3) only.
 
 Everything that touches the keys runs in the browser:
 
@@ -11,7 +11,7 @@ Everything that touches the keys runs in the browser:
   with `/scan2` pages. Every visitor downloads the same pages, so the node does
   not learn which wallet is reading. Each page is checked against its block
   header, and the result is checked against the latest checkpoint signed by
-  the Zoka team (Ed25519 and ML-DSA-65).
+  two of the network's three authority keys (each Ed25519 and ML-DSA-65).
 - A payment is planned and proved (STARK) in a Web Worker. Only the proved
   payment goes to `POST /transactions`. The public node relays it to its peers
   like a payment from any other peer.

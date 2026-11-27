@@ -171,7 +171,7 @@ export function Overview({ go }: { go: (tab: Tab) => void }) {
         <div className="stat">
           <p className="label">Signed checkpoint</p>
           <p className="stat-value">{wallet.verified ? `#${wallet.verified.toLocaleString("en")}` : "Not yet"}</p>
-          <p className="stat-hint">Ed25519 + ML-DSA-65, by the Zoka team</p>
+          <p className="stat-hint">Ed25519 + ML-DSA-65, by 2 of the 3 authority keys</p>
         </div>
         <div className="stat">
           <p className="label">Network hashrate</p>
