@@ -1,7 +1,7 @@
 {
   "name": "zokawallet",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "The Zoka Quantic web wallet: recovery words, scanning and STARK proofs stay in the browser.",
   "type": "module",
   "scripts": {
